@@ -11,13 +11,7 @@
   library(tidyverse)# version 1.2.1
   library(rstanarm)# version 2.1.7.4
   library(projpred)# version 0.8.0
-  #rm(list=ls())
-  
-  #server <- "/home/jsebald/upload_to_server"
-  local <- "D:/JULIUS/PhD/Projects/disturbances_and_natural_hazards/"
-  
-  setwd(local)
-  #setwd(server)
+
   
 rstan::rstan_options(auto_write = TRUE)
 options(mc.cores = 4) 
@@ -27,13 +21,13 @@ rm(list=ls())
 
 # Load data ---------------------------------------------------------------
 
-data <- read.csv("methods/r/data_processed/dataframes/data_for_model_08222018.csv")
+data <- read.csv("../data/data_for_model.csv")
 
 data$eco_unit <- as.factor(data$eco_unit) 
 
 processes <- c("DFLOOD", "DFLOW", "FST")
 
-shp_ws <- raster::shapefile("methods/r/data_processed/shapefiles/shp_ws.shp")
+shp_ws <- raster::shapefile("../data/shp_ws.shp")
 shp_ws_fortify <- broom::tidy(shp_ws, region = "WLK_ID")
 
 
