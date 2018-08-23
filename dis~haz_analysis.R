@@ -29,7 +29,7 @@ rm(list=ls())
 
 data <- read.csv("methods/r/data_processed/dataframes/data_for_model_08222018.csv")
 
-data$eco_unit <- as.factor(data$eco_unit) #  !!!change in data processing script
+data$eco_unit <- as.factor(data$eco_unit) 
 
 processes <- c("DFLOOD", "DFLOW", "FST")
 
@@ -72,7 +72,7 @@ for (process in processes) {
   # Calibrate model
   
   fit_ws <- stan_glmer(as.formula(paste0("response ~ ", paste0(paste(vars_ws$varname, collapse = "+"), "+ (1|eco_unit)"))),
-                     data = data_model, family = binomial(link = "logit"))
+                     data = data_model, family = binomial(link = "logit"), prior_intercept = normal(0|1), prior = normal(0|1))
   
 
   # Reduce predictors by projection predictive variable selection
@@ -112,7 +112,8 @@ for (process in processes) {
   # calibrate model with reduced number of variables
   
   fit_ws_reduced <- stan_glm(as.formula(paste0("response ~ ", paste(predictors_selected, collapse = "+"))),
-                             data = data_model, family = binomial(link = "logit"))
+                             data = data_model, family = binomial(link = "logit"), 
+                             prior_intercept = normal(0|1), prior = normal(0|1))
   
 
   # store estimates of model in format which is suitable to plot with ggplot
@@ -143,7 +144,7 @@ for (process in processes) {
   
   # compute matrix of predictions 
   
-  preds <- posterior_linpred(fit_ws_reduced, transform = TRUE)
+  preds <- posterior_linpred(fit_ws_reduced, transform = TRUE, re.form = NA)
   
   # expected mean of probablity distribution for all watersheds
   
@@ -177,7 +178,7 @@ for (process in processes) {
   
   # compute matrix of predictions when disturbances are not included in the model
   
-  pred_nodist <- posterior_linpred(fit_ws_reduced_nodist, transform = TRUE)
+  pred_nodist <- posterior_linpred(fit_ws_reduced_nodist, transform = TRUE, re.form = NA)
   
   # create dataframe of predictions with disturbances included and without disturbances
   
@@ -244,7 +245,7 @@ for (process in processes) {
 
   # create predictons with new data but on the basis of the fitted model
   
-  predictions <- posterior_linpred(fit_ws, newdata = newdata, transform = TRUE)
+  predictions <- posterior_linpred(fit_ws, newdata = newdata, transform = TRUE, re.form = NA)
 
   newdata$prob_mean <- apply(predictions, 2, mean)
   newdata$prob_sd <- apply(predictions, 2, sd)
@@ -281,7 +282,7 @@ for (process in processes) {
                          severity = seq(min(data_model$severity), quantile(data_model$severity, 0.99), length.out = 100),
                          frequency = seq(min(data_model$frequency), quantile(data_model$frequency, 0.99), length.out = 100))
 
-  predictions <- posterior_linpred(fit_ws, newdata = newdata, transform = TRUE)
+  predictions <- posterior_linpred(fit_ws, newdata = newdata, transform = TRUE, re.form = NA)
 
   newdata$prob_mean <- apply(predictions, 2, mean)
   newdata$prob_sd <- apply(predictions, 2, sd)
@@ -510,7 +511,7 @@ p_response_heatmap <- results %>%
 ### Correlations
 
 prob_count <- results %>%
-  map(~ posterior_linpred(.[[1]], transform = TRUE)) %>%
+  map(~ posterior_linpred(.[[1]], transform = TRUE, re.form = NA)) %>%
   map2(.y = list(data$DFLOOD, data$DFLOW, data$FST),
        ~ data.frame(pred = apply(.x, 2, mean), count = .y)) %>%
   set_names(processes) %>%

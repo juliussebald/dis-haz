@@ -56,6 +56,10 @@ dem_austria <- raster("methods/r/data_processed/rasters/dem_austria.tif")
 
 events <- read.csv("materials/raw_data/data_natural_hazards/GroupEvents.csv") 
 
+# ecological units
+
+eco <- raster::shapefile("materials/raw_data/shapefiles_ecological_units/WLamPoly.shp")
+
 # Clean shp_ws1 and shp_ws0 to build rasterfile of complete studyarea ----------------------------
 
 # transform column WLK_ID to numeric, otherwise rasterize function will get confused
@@ -165,7 +169,7 @@ summary(events_ws)
 
 write_csv(events_ws, "methods/r/data_processed/dataframes/events_ws.csv")
 
-events_ws <- read.csv("methods/r/data_processed/dataframes/events_ws.csv") 
+events_ws <- read.csv("methods/r/data_processed/dataframes/temp/events_ws.csv") 
 
 # create vector of WLK_IDs of shp_ws1_new
 
@@ -231,7 +235,7 @@ summary(geomorphology_ws)
 
 write_csv(geomorphology_ws, "methods/r/data_processed/dataframes/old/geomorpholgy_ws.csv")
 
-geomorphology_ws <- read.csv("methods/r/data_processed/dataframes/old/ws_geomorphology.csv") 
+geomorphology_ws <- read.csv("methods/r/data_processed/dataframes/temp/geomorpholgy_ws.csv") 
   
 # Landcover and topography ---------------------------------------------------------------
 
@@ -277,6 +281,9 @@ summary(landcover_ws)
 
 write_csv(landcover_ws,"methods/r/data_processed/dataframes/old/landcover_ws.csv")
 
+landcover_ws <- read.csv("methods/r/data_processed/dataframes/temp/landcover_ws.csv")
+
+
 # calculate mean slope and mean elevation for every watershed
 
 values_topography <- data.table(WLK_ID = values(raster_ws), 
@@ -291,7 +298,42 @@ topography_ws <- values_topography %>%
 
 summary(topography_ws)
 
-write_csv(topography_ws, "methods/r/data_processed/dataframes/old/topography_ws.csv")
+write_csv(topography_ws, "methods/r/data_processed/dataframes/temp/topography_ws.csv")
+topography_ws <- read.csv("methods/r/data_processed/dataframes/temp/topography_ws.csv")
+
+
+
+# Ecological units --------------------------------------------------------
+
+eco$Wuchsge1 <- as.integer(as.character(eco$Wuchsge1))
+
+ras <- raster(ncol = 180, nrow = 180)
+extent(ras) <- extent(eco)
+res(ras) <- res(landcover)
+crs(ras) <- crs(landcover)
+rast_eco <- rasterize(eco, ras, field = "Wuchsge1")
+eco_units <- projectRaster(rast_eco, landcover, method = "ngb")
+
+writeRaster(eco_units, "methods/r/data_processed/rasters/eco_units.tif")
+
+eco_units <- raster("methods/r/data_processed/rasters/eco_units.tif")
+
+values_eco <- data.table(WLK_ID = values(raster_ws),
+                         eco_unit = values(eco_units)) %>%
+  filter(!is.na(WLK_ID)) %>%
+  filter(!is.na(eco_unit))
+
+summary(values_eco)
+
+eco_ws <- values_eco %>%
+  group_by(WLK_ID) %>%
+  summarise(eco_unit = raster::modal(eco_unit))
+
+
+summary(eco_ws)
+
+write_csv(eco_ws, "methods/r/data_processed/dataframes/temp/eco_ws.csv")
+eco_ws <- read.csv("methods/r/data_processed/dataframes/temp/eco_ws.csv")
 
 
 # Disturbances ------------------------------------------------------------
@@ -310,7 +352,8 @@ disturbance_ws <- values_disturbance %>%
 
 summary(disturbance_ws)
 
-write_csv(disturbance_ws, "methods/r/data_processed/dataframes/old/disturbance_ws.csv")
+write_csv(disturbance_ws, "methods/r/data_processed/dataframes/temp/disturbance_ws.csv")
+disturbance_ws <- read.csv("methods/r/data_processed/dataframes/temp/disturbance_ws.csv")
 
 
 
@@ -322,6 +365,7 @@ data_for_model <- geomorphology_ws %>%
   left_join(landcover_ws, by = "WLK_ID") %>%
   left_join(disturbance_ws, by = "WLK_ID") %>%
   left_join(events_ws, by = "WLK_ID") %>%
+  left_join(eco_ws, by = "WLK_ID") %>%
   mutate(patchdensity = clumps / (area*100)) %>%
   dplyr::select(-clumps) %>%
   mutate_at(.vars = vars(DFLOOD, DFLOW, FST), function(x) ifelse(is.na(x), 0, x))
@@ -329,6 +373,5 @@ data_for_model <- geomorphology_ws %>%
 
 summary(data_for_model)
 
-write_csv(data_for_model, "methods/r/data_processed/dataframes/data_for_model_08162018.csv")
-
+write_csv(data_for_model, "methods/r/data_processed/dataframes/data_for_model_08222018.csv")
 
