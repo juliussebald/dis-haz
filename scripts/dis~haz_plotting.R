@@ -10,15 +10,8 @@
   library(igraph)# version 1.2.1
   library(tidyverse)# version 1.2.1
   library(projpred)
-  #library(patchwork)
   library(ggthemes)
-  #rm(list=ls())
-  
-  #server <- "/home/jsebald/upload_to_server"
-  local <- "D:/JULIUS/PhD/Projects/disturbances_and_natural_hazards/"
-  
-  setwd(local)
-  #setwd(server)
+  library(rstanarm)
   
   rm(list=ls())
   
@@ -28,16 +21,16 @@
 
 # Load data ---------------------------------------------------------------
 
-data <- read.csv("methods/r/data_processed/dataframes/data_for_model_08162018.csv")
+load(file = "../../../../../results/results.RData")
 
+data <- read.csv("../data/data_for_model.csv")
 
-processes <- c("DFLOOD", "DFLOW", "FST")
-
-shp_ws <- raster::shapefile("methods/r/data_processed/shapefiles/shp_ws.shp")
+shp_ws <- raster::shapefile("../data/shp_ws.shp")
 shp_ws_fortify <- broom::tidy(shp_ws, region = "WLK_ID")
 
+# Set names ---------------------------------------------------------------
 
-load(file = "results/results.RData")
+processes <- c("DFLOOD", "DFLOW", "FST")
 
 vars_ws <- data.frame(varname = c("h_mean", "Melton", "Elevation", "Circularit", "Elongation", "artifical", "forest", "area", "patchdensity", 
                                   "severity", 
@@ -49,8 +42,7 @@ vars_ws <- data.frame(varname = c("h_mean", "Melton", "Elevation", "Circularit",
                                "Severity x Frequency"),
                       stringsAsFactors = FALSE)
 
-
-# Plots -------------------------------------------------------------------
+# Plotting ----------------------------------------------------------------
 
 subset_size <- results %>% 
   map(~ .[[2]])
@@ -232,7 +224,7 @@ p_response_heatmap <- results %>%
 ### Correlations
 
 prob_count <- results %>%
-  map(~ posterior_linpred(.[[1]], transform = TRUE)) %>%
+  map(~ posterior_linpred(.[[1]], transform = TRUE), re.form = NA) %>%
   map2(.y = list(data$DFLOOD, data$DFLOW, data$FST),
        ~ data.frame(pred = apply(.x, 2, mean), count = .y)) %>%
   set_names(processes) %>%
@@ -246,25 +238,3 @@ ggsave("correlations.pdf", p_response_classic, path = "results/", width = 7.5, h
 ggsave("correlations.png", p_response_classic, path = "results/", width = 7.5, height = 2.25)
 
 
-
-vars_cor <- vars_ws %>% 
-  filter(varname != "severity:frequency")
-
-cor_variables <- data %>%
-  dplyr::select_(.dots = vars_cor$varname) %>%
-  rename_(.dots = setNames(vars_cor$varname, vars_cor$name)) %>%
-  cor(.) %>%
-  as.data.frame() %>%
-  rownames_to_column("predx") %>%
-  gather(key = predy, value = cor, -predx) %>%
-  ggplot(., aes(x = predx, y = predy, fill = cor)) +
-  geom_tile() +
-  scale_fill_gradient2(limits = c(-1, 1)) +
-  theme_bw() +
-  theme(axis.title.x = element_blank(),
-        axis.title.y = element_blank(),
-        axis.text.x = element_text(angle = 45, hjust = 1)) 
-
-
-ggsave("correlations_variables.pdf", cor_variables, path = "results/", width = 7.5, height = 5)
-ggsave("correlations_variables.png", cor_variables, path = "results/", width = 7.5, height = 5)
