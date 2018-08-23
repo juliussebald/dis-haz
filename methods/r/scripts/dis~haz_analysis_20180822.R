@@ -122,9 +122,19 @@ for (process in processes) {
   estimates <- as.matrix(fit_ws_reduced) %>%
     as.data.frame() %>%
     dplyr::select(-1) %>%
+    dplyr::select(.dots = vars$varnames) %>%
     gather(key = varname, value = value) %>%
     left_join(vars_ws, by = "varname") %>%
     mutate(process = process)
+  
+  randomeffects <- as.matrix(fit_ws_reduced) %>%
+    as.data.frame() %>%
+    dplyr::select(-1) %>%
+    dplyr::select(.dots = -(vars$varnames)) %>%
+    gather(key = varname, value = value) %>%
+    left_join(vars_ws, by = "varname") %>%
+    mutate(process = process)
+  
   
   # Assessing the model fit: loo = leave one out cross-validation, elpd = expected log predictive density
   
@@ -304,10 +314,11 @@ for (process in processes) {
                        auc, #7
                        p_roc, #8
                        estimates, #9
-                       p_probabilitymap_all, #10
-                       p_probabilitymap_difference, #11
-                       p_responsecurve_classical, #12
-                       p_responsecurve_heatmap) #13
+                       randomeffects, #10
+                       p_probabilitymap_all, #11
+                       p_probabilitymap_difference, #12
+                       p_responsecurve_classical, #13
+                       p_responsecurve_heatmap) #14
   
 }
 
