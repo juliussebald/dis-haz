@@ -71,7 +71,7 @@ for (process in processes) {
   
   # Calibrate model
   
-  fit_ws <- stan_glm(as.formula(paste0("response ~ ", paste0(paste(vars_ws$varname, collapse = "+"), "+ eco_unit"))),
+  fit_ws <- stan_glmer(as.formula(paste0("response ~ ", paste0(paste(vars_ws$varname, collapse = "+"), "+ (1|eco_unit)"))),
                      data = data_model, family = binomial(link = "logit"))
   
 
