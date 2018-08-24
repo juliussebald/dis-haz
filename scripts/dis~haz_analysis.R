@@ -80,9 +80,27 @@ for (process in processes) {
   
   # Using LOO-ELPD
   
-  model_comparison <- loo::compare(loo(fit_null), loo(fit_ws_only), loo(fit_full))
+  loo_fit_ws_only <- loo(fit_ws_only)
+  loo_fit_full <- loo(fit_full)
+  loo_fit_null <- loo(fit_null)
   
-  # Using AUC
+  null_vs_ws_only <- loo::compare(loo_fit_null, loo_fit_ws_only)
+  ws_only_vs_full <- loo::compare(loo_fit_ws_only, loo_fit_full)
+  
+  model_comparison <- as.data.frame(rbind(null_vs_ws_only, ws_only_vs_full))
+  model_comparison$comparison <- rownames(model_comparison)
+  rownames(model_comparison) <- NULL
+  
+  # Decide for final model
+  
+  if ((null_vs_ws_only[1] - 2 * null_vs_ws_only[2]) > 0) {
+    final_model <- fit_ws_only
+    if ((ws_only_vs_full[1] - 2 * ws_only_vs_full[2]) > 0) {
+      final_model <- fit_full
+    }
+  }
+  
+  # Calculate LOO AUC for final model
   
   get_auc <- function(model) { # Function for calculating AUC of model via loo
     loo <- loo(model, save_psis = TRUE)
@@ -92,13 +110,7 @@ for (process in processes) {
     return(auc)
   }
   
-  model_comparison <- as.data.frame(model_comparison) # Convert into data.frame
-  model_comparison$models <- gsub(")", "", gsub(glob2rx("loo(*"), "", rownames(model_comparison))) # Remote loo() around variable names
-  model_comparison$auc <- NA # Add empty row for stroing AUC values
-  
-  for (i in 1:nrow(model_comparison)) {
-    model_comparison[i, "auc"] <- get_auc(get(model_comparison[i, "models"])) # Grab model and calculate AUC, add to model comparison table
-  }
+  auc_final <- get_auc(final_model)
   
   # ### Plot roc curves -> I grayed this out as we do not really need those plots
   #
@@ -118,7 +130,7 @@ for (process in processes) {
   # the matrix contains 4000 draws from the posterior distribution of every variable which is included in
   # the model
   
-  estimates <- as.matrix(fit_full) %>%
+  estimates <- as.matrix(final_model) %>%
     as.data.frame() %>%
     dplyr::select(-matches("Intercept")) %>% # Select everything that is not an intercept
     gather(key = varname, value = value) %>%
@@ -127,7 +139,7 @@ for (process in processes) {
   
   # Do the same stuff for the random effects + the scale parameter of the random effect
   
-  randomeffects <- as.matrix(fit_full) %>%
+  randomeffects <- as.matrix(final_model) %>%
     as.data.frame() %>%
     dplyr::select(matches("Intercept")) %>% # Select everything that is an intercept
     gather(key = varname, value = value) %>%
@@ -156,7 +168,7 @@ for (process in processes) {
 
   # create predictons from the linear predictor with new data but on the basis of the fitted model
   
-  predictions <- posterior_linpred(fit_full, newdata = response_disturbance, transform = TRUE, re.form = NA)
+  predictions <- posterior_linpred(final_model, newdata = response_disturbance, transform = TRUE, re.form = NA)
   
   # Calculate mean and sd of posterior predictions and add to new data
   
@@ -165,13 +177,12 @@ for (process in processes) {
   
   ### Gather results and add to list
   
-  results[[k]] <- list(fit_full, #1
-                       fit_ws_only, #2 
-                       fit_null, #3
-                       model_comparison, #4
-                       estimates, #5
-                       randomeffects, #6
-                       response_disturbance) #7
+  results[[k]] <- list(final_model, #1
+                       model_comparison, #2
+                       auc_final, #3
+                       estimates, #4
+                       randomeffects, #5
+                       response_disturbance) #6
   
 }
 
@@ -181,7 +192,10 @@ save(results, file = "../results/results.RData")
 
 ### Model comparison table
 
-results[[3]][[4]]
+model_comparison <- results %>%
+  map(~ .[[4]]) %>%
+  set_names(processes) %>%
+  bind_rows(.id = "process")
 
 ### Model estimates
 
