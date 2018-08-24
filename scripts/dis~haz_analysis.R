@@ -181,7 +181,10 @@ save(results, file = "../results/results.RData")
 
 ### Model comparison table
 
-results[[3]][[4]]
+model_comparison <- results %>%
+  map(~ .[[4]]) %>%
+  set_names(processes) %>%
+  bind_rows(.id = "process")
 
 ### Model estimates
 
