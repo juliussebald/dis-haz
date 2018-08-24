@@ -12,10 +12,10 @@
   library(rstanarm)# version 2.1.7.4
   library(projpred)# version 0.8.0
 
-rstan::rstan_options(auto_write = TRUE)
-options(mc.cores = 4) 
+  rstan::rstan_options(auto_write = TRUE)
+  options(mc.cores = 4) 
 
-rm(list=ls())  
+  rm(list=ls())  
 }
 
 # Load data ---------------------------------------------------------------
@@ -50,7 +50,7 @@ for (process in processes) {
   
   k <- k + 1
   
-  ### Bring data into form
+  # Bring data into form
   
   vars_nointeraction <- vars_ws %>% 
     filter(varname != "severity:frequency")
@@ -113,6 +113,7 @@ for (process in processes) {
   
   ### Extract estimates
   
+
   # store estimates of model in format which is suitable to plot with ggplot
   # the matrix contains 4000 draws from the posterior distribution of every variable which is included in
   # the model
