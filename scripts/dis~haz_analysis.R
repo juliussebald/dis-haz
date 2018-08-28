@@ -338,4 +338,24 @@ p_map <- map_prop_3 +
 
 ggsave("probability_maps.pdf", p_map, path = "../results", width = 7.5, height = 5.5)
 
+### Random effects
+
+p_estimate <- results %>% 
+  map(~ .[[5]]) %>%
+  bind_rows() %>%
+  mutate(process = factor(process, levels = c("FST", "DFLOOD", "DFLOW"))) %>%
+  ggplot(., aes(x = fct_rev(name), y = value)) +
+  geom_violin(fill = "grey") +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        strip.background = element_blank()) +
+  coord_flip() +
+  theme(strip.background = element_blank()) +
+  geom_hline(yintercept = 0, linetype = "dashed", col = scales::muted("red")) +
+  labs(y = "Posterior probability distribution of parameter estimates", x = NULL, fill = "Process") +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  facet_wrap(~process)
+
+ggsave("estimates.pdf", p_estimate, path = "../results/", width = 7.5, height = 2.5)
+ggsave("estimates.png", p_estimate, path = "../results/", width = 7.5, height = 2.5)
 
