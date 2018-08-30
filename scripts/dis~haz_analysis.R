@@ -67,18 +67,11 @@ for (process in processes) {
   ### Calibrate models
   
   # Watershed-only model
-<<<<<<< HEAD
   
   fit_ws_only <- stan_glm(as.formula(paste0("response ~ ", paste0(paste(vars_ws$varname[-which(vars_ws$varname %in% c( "rel_years","extent", "pulse", "extent:pulse", "extent:rel_years"))], collapse = "+")))),
                           data = data_model, 
                           family = binomial(link = "logit"), 
                           prior_intercept = normal(0|1), prior = normal(0|1))
-=======
-  
-  fit_ws_only <- stan_glm(as.formula(paste0("response ~ ", paste0(paste(vars_ws$varname[-which(vars_ws$varname %in% c( "severity", "frequency", "severity:frequency"))], collapse = "+")))),
-                          data = data_model, 
-                          family = binomial(link = "logit"), 
-                          prior_intercept = normal(0|1), prior = normal(0|1))
   
   ws_varsel <- varsel(fit_ws_only)
   
@@ -90,55 +83,22 @@ for (process in processes) {
                                     family = binomial(link = "logit"),
                                     prior_intercept = normal(0|1), prior = normal(0|1))
   
-  # Full model
-  
-  fit_full <- update(fit_ws_only_reduced, . ~ . + severity * frequency)
->>>>>>> 2a39cc09e6127122b64b9c1adeab4650ae7cf8e1
-  
-  ws_varsel <- varsel(fit_ws_only)
-  
-  subset_size <- suggest_size(ws_varsel, alpha = 0.05)
-  ws_predictors_selected <- names(ws_varsel$varsel$vind[1:subset_size])
-  
-  fit_ws_only_reduced <- stan_glmer(as.formula(paste0("response ~ ", paste0(paste(ws_predictors_selected, collapse = "+"), "+ (1|eco_unit)"))),
-                                    data = data_model,
-                                    family = binomial(link = "logit"),
-                                    prior_intercept = normal(0|1), prior = normal(0|1))
-  
-<<<<<<< HEAD
   # Full models
   
   fit_full_exp <- update(fit_ws_only_reduced, . ~ . + extent * pulse)
   fit_full_e_p <- update(fit_ws_only_reduced, . ~ . + extent + pulse)
   fit_full_exr <- update(fit_ws_only_reduced, . ~ . + extent * rel_years)
   fit_full_e_r <- update(fit_ws_only_reduced, . ~ . + extent + rel_years)
-=======
-  loo_fit_ws_only <- loo(fit_ws_only)
-  loo_fit_ws_only_reduced <- loo(fit_ws_only_reduced)
-  loo_fit_full <- loo(fit_full)
-  loo_fit_null <- loo(fit_null)
-  
-  null_vs_ws_only <- loo::compare(loo_fit_null, loo_fit_ws_only_reduced)
-  ws_only_vs_full <- loo::compare(loo_fit_ws_only_reduced, loo_fit_full)
->>>>>>> 2a39cc09e6127122b64b9c1adeab4650ae7cf8e1
   
   
-<<<<<<< HEAD
   
   # Null model
   
   fit_null <- update(fit_full_exp, . ~ 1 + ( 1 | eco_unit))
-=======
-  # Calculate LOO AUC for final model
->>>>>>> 2a39cc09e6127122b64b9c1adeab4650ae7cf8e1
   
   ### Compare models
   
-<<<<<<< HEAD
   # Using LOO-ELPD
-=======
-  auc_final <- get_auc(fit_full)
->>>>>>> 2a39cc09e6127122b64b9c1adeab4650ae7cf8e1
   
   loo_fit_ws_only <- loo(fit_ws_only)
   loo_fit_ws_only_reduced <- loo(fit_ws_only_reduced)
@@ -156,46 +116,6 @@ elpds <-  rbind(null = loo_fit_null$estimates[1,],
                 exr = loo_fit_full_exr$estimates[1,],
                 e_r = loo_fit_full_e_r$estimates[1,])
 
-<<<<<<< HEAD
-=======
-  # store estimates of model in format which is suitable to plot with ggplot
-  # the matrix contains 4000 draws from the posterior distribution of every variable which is included in
-  # the model
-  
-  estimates <- as.matrix(fit_full) %>%
-    as.data.frame() %>%
-    dplyr::select(-matches("Intercept")) %>% # Select everything that is not an intercept
-    gather(key = varname, value = value) %>%
-    left_join(vars_ws, by = "varname") %>%
-    mutate(process = process)
-  
-  # Do the same stuff for the random effects + the scale parameter of the random effect
-  
-  randomeffects <- as.matrix(fit_full) %>%
-    as.data.frame() %>%
-    dplyr::select(matches("Intercept")) %>% # Select everything that is an intercept
-    gather(key = varname, value = value) %>%
-    mutate(process = process)
-  
-  ### Create prediction for mapping
-  
-  pred_posterior_full <- posterior_predict(fit_full)
-  pred_posterior_ws_only <- posterior_predict(fit_ws_only_reduced)
-  
-  pred_posterior <- data_frame(WLK_ID = as.character(data_model$WLK_ID),
-                               pred = apply(pred_posterior_full, 2, mean),
-                               sd = apply(pred_posterior_full, 2, sd),
-                               pred_diff = apply(pred_posterior_full - pred_posterior_ws_only, 2, mean),
-                               sd_diff = apply(pred_posterior_full - pred_posterior_ws_only, 2, sd)) %>%
-    mutate(., 
-           varcof = sd / pred,
-           varcof_diff = sd_diff / pred_diff)
-  
-  shape <- shp_ws %>%
-    left_join(pred_posterior, by = "WLK_ID")
-  
-  #### Create plots of response curves
->>>>>>> 2a39cc09e6127122b64b9c1adeab4650ae7cf8e1
   
   
   models[[k]] <- list(fit_full_exp,#1
@@ -206,7 +126,6 @@ elpds <-  rbind(null = loo_fit_null$estimates[1,],
                        
 }
 
-<<<<<<< HEAD
 save(models, file = "../results/models.RData")
 
 
@@ -228,27 +147,6 @@ get_auc <- function(model) { # Function for calculating AUC of model via loo
   ploo <- loo::E_loo(preds, psis_object = loo$psis_object, type = "mean", log_ratios = -log_lik(model))$value
   auc <- AUC::auc(AUC::roc(ploo, factor(data_model$response)))
   return(auc)
-=======
-  # create predictons from the linear predictor with new data but on the basis of the fitted model
-  
-  predictions <- posterior_linpred(fit_full, newdata = response_disturbance, transform = TRUE, re.form = NA)
-  
-  # Calculate mean and sd of posterior predictions and add to new data
-  
-  response_disturbance$prob_mean <- apply(predictions, 2, mean)
-  response_disturbance$prob_sd <- apply(predictions, 2, sd)
-  
-  ### Gather results and add to list
-  
-  results[[k]] <- list(fit_full, #1
-                       model_comparison, #2
-                       auc_final, #3
-                       estimates, #4
-                       randomeffects, #5
-                       response_disturbance, #6
-                       shape) #7
-  
->>>>>>> 2a39cc09e6127122b64b9c1adeab4650ae7cf8e1
 }
 
 auc_final <- get_auc(models[[1]][[2]])
@@ -367,21 +265,12 @@ p_response <- results %>%
   set_names(processes) %>%
   bind_rows(.id = "process") %>%
   mutate(process = factor(process, levels = c("FST", "DFLOOD", "DFLOW"))) %>%
-<<<<<<< HEAD
   mutate(pulse = factor(pulse, labels = c("High (+1SD)", "Average", "Low (-1SD)"))) %>%
   ggplot(., aes(x = extent, y = prob_mean)) +
   geom_ribbon(aes(ymin = prob_mean - prob_sd, ymax = prob_mean + prob_sd, fill = pulse), alpha = 0.3) +
   geom_line(aes(col = pulse)) +
   geom_point(data = sample_n(data %>% mutate(extent = as.double(scale(extent))) %>% filter(extent < quantile(extent, 0.99)), 1000), 
              aes(x = extent, y = -0.05), shape = 124, alpha = 0.3) +
-=======
-  mutate(frequency = factor(frequency, labels = c("High (+1SD)", "Average", "Low (-1SD)"))) %>%
-  ggplot(., aes(x = severity, y = prob_mean)) +
-  geom_ribbon(aes(ymin = prob_mean - prob_sd, ymax = prob_mean + prob_sd, fill = frequency), alpha = 0.3) +
-  geom_line(aes(col = frequency)) +
-  geom_point(data = sample_n(data %>% mutate(severity = as.double(scale(severity))) %>% filter(severity < quantile(severity, 0.99)), 1000), 
-             aes(x = severity, y = -0.05), shape = 124, alpha = 0.3) +
->>>>>>> 2a39cc09e6127122b64b9c1adeab4650ae7cf8e1
   theme_bw() +
   theme(#legend.position = c(0, 1),
     #legend.justification = c(0, 1),
@@ -457,15 +346,9 @@ for (i in 1:3) {
     guides(fill = guide_colorbar(barwidth = 7.5, barheight = 0.25,
                                  direction = "horizontal", title.position = "top"))
   
-<<<<<<< HEAD
   assign(paste0("map_prop_", i), map_prop)
   assign(paste0("map_diff_", i), map_diff)
   
-=======
-    assign(paste0("map_prop_", i), map_prop)
-    assign(paste0("map_diff_", i), map_diff)
-    
->>>>>>> 2a39cc09e6127122b64b9c1adeab4650ae7cf8e1
 }
 
 p_map <- map_prop_3 + 
@@ -498,7 +381,3 @@ p_estimate <- results %>%
 
 ggsave("estimates.pdf", p_estimate, path = "../results/", width = 7.5, height = 2.5)
 ggsave("estimates.png", p_estimate, path = "../results/", width = 7.5, height = 2.5)
-<<<<<<< HEAD
-=======
-
->>>>>>> 2a39cc09e6127122b64b9c1adeab4650ae7cf8e1
