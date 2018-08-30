@@ -341,13 +341,14 @@ eco_ws <- read.csv("methods/r/data_processed/dataframes/temp/eco_ws.csv")
 
 values_disturbance <- data.table(WLK_ID = values(raster_ws),
                       forest = values(forest),
-                      disturbance = values(disturbance)) %>%
+                      disturbance = values(disturbance) %>%
   filter(!is.na(WLK_ID)) 
 
 disturbance_ws <- values_disturbance %>%
   group_by(WLK_ID) %>%
-  summarise(severity = sum(disturbance > 0) / sum(forest),
-            frequency = DescTools::Gini(table(factor(disturbance[disturbance > 0], levels = 1986:2016)))) %>%
+  summarise(extent = sum(disturbance > 0) / sum(forest),
+            pulse = DescTools::Gini(table(factor(disturbance[disturbance > 0], levels = 1986:2016))),
+            rel_years = (length(unique(disturbance))-1)/31) %>%
   mutate_all(function(x) ifelse(is.na(x) | is.nan(x), 0, x))
 
 summary(disturbance_ws)
@@ -373,5 +374,6 @@ data_for_model <- geomorphology_ws %>%
 
 summary(data_for_model)
 
-write_csv(data_for_model, "methods/r/data_processed/dataframes/data_for_model_08222018.csv")
+write_csv(data_for_model, "methods/r/git/dis-haz/data/data_for_model.csv")
+write_csv(data_for_model, "methods/r/data_processed/dataframes/data_for_model_20180824.csv")
 
