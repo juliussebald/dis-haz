@@ -148,9 +148,15 @@ models %>%
 
 ### Decide for final model
 
-final_models <- models %>% map2(.y = c(2, 3, 3), ~ .[[.y]])
+final_models <- models %>% map2(.y = c(2, 2, 3), ~ .[[.y]])
 
-final_models <- models %>% map2(.y = c(2, 3, 3), ~ .[[2]])
+final_models <- models %>% map2(.y = c(2, 2, 3), ~ .[[2]])
+
+
+final_models  <- list(models[[1]][[2]], models[[2]][[2]], models[[3]][[3]])
+
+final_models[[3]]
+
 
 ### Calculate LOO AUC for final model
 
@@ -201,7 +207,7 @@ estimates <- final_models %>%
         gather(key = varname, value = value) %>%
         left_join(vars_ws, by = "varname")) %>%
   set_names(processes) %>%
-  bind_rows(.id = "process")
+  bind_rows(.id = "process") 
 
 p_estimates <- ggplot(estimates, aes(x = fct_rev(name), y = value)) +
   geom_violin(fill = "grey") +
@@ -213,7 +219,8 @@ p_estimates <- ggplot(estimates, aes(x = fct_rev(name), y = value)) +
   geom_hline(yintercept = 0, linetype = "dashed", col = scales::muted("red")) +
   labs(y = "Posterior probability distribution of parameter estimates", x = NULL, fill = "Process") +
   scale_fill_brewer(palette = "Greys", direction = -1) +
-  facet_wrap(~process)
+  facet_wrap(~process) 
+
 
 ggsave("estimates.pdf", p_estimates, path = "../results/", width = 7.5, height = 2.5)
 
@@ -260,7 +267,7 @@ response_disturbance <- expand.grid(h_mean = 0,
                                     extent = seq(quantile(scale(data$extent), 0), 
                                                  quantile(scale(data$extent), 0.99), 
                                                  length.out = 100),
-                                    pulse = c(-1, 0, 1))
+                                    pulse = c(-1, 0, 1))  # viele EZGs haben Pulisty kleiner als -1
 
 predictions <- final_models %>%
   map(~ posterior_linpred(., newdata = response_disturbance, transform = TRUE, re.form = NA))
