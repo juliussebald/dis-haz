@@ -12,6 +12,9 @@
   library(projpred)
   library(ggthemes)
   library(rstanarm)
+  library(sf)
+  library(ggridges)
+  library(gridExtra)
   
   rm(list=ls())
   
@@ -238,3 +241,334 @@ ggsave("correlations.pdf", p_response_classic, path = "results/", width = 7.5, h
 ggsave("correlations.png", p_response_classic, path = "results/", width = 7.5, height = 2.25)
 
 
+
+# temporal trend in natural hazard events -------------------------------------------------------
+
+events <- read.csv("../../../../../materials/raw_data/data_natural_hazards/GroupEvents.csv")
+
+
+summary(events)
+
+data <- events %>%
+  dplyr::select(prozessart, ereignis_jahr) %>%
+  rename(year = ereignis_jahr, process = prozessart) %>%
+  filter(year %in% 1984:2018) %>%
+  mutate(process = case_when(
+    process == "Fluviatiler Feststofftransport" ~ "FST",
+    process ==  "Murartiger Feststofftransport" ~ "DFLOOD",
+    process == "Murgang" ~ "DFLOW")) %>%
+  group_by(year, process) %>%
+  summarize(events = n()) %>%
+  mutate(process = factor(process, levels = c("DFLOW","DFLOOD","FST")))
+
+
+p_trend <- ggplot(data, aes(x = year, y = events, col = process)) +
+  geom_point() +
+  labs(title = "", col = "") +
+  geom_smooth(method = "gam", formula = y ~ s(x)) +
+  facet_wrap(~process, scales = "free") +
+  theme_few() +
+  theme(legend.position = "none",
+        axis.title = element_blank()) 
+
+ggsave("p_trend.pdf", p_trend, path = "../../../../../results/figures/", width = 6, height = 3)
+ggsave("p_trend.png", p_trend, path = "../../../../../results/figures/", width = 6, height = 3)
+
+
+
+
+# Maps of study area --------------------------------------------------------------------
+
+library(maptools)
+library(maps)
+
+# study area
+
+austria <- read_sf("../../../../../materials/raw_data/shapfiles_austria/austria_EPSG_3035_ETRS89.shp") %>%
+  mutate(country = "austria") %>%
+  group_by(country) %>%
+  summarize()
+
+studyarea <- read_sf("../data/shapes/shp_ws.shp") %>%
+  mutate(country = "austria") %>%
+  group_by(country) %>%
+  summarize()
+
+p_study_area <- ggplot(austria) +
+  geom_sf(aes(fill = " Austria")) +
+  geom_sf(data = studyarea, aes(fill = " Study Area")) +
+  scale_fill_manual(values = c("gray82", "gray42")) +
+  theme_bw() +
+  theme(legend.title = element_blank())
+
+
+ggsave("../../../../../results/figures/p_study_area.png", p_study_area, width = 8, height = 5)
+
+
+worldmap <- rnaturalearth::ne_download(scale = 50,
+                                       type = "countries",
+                                       category = "cultural",
+                                       destdir = tempdir(),
+                                       load = TRUE,
+                                       returnclass = "sf") %>%
+  mutate(austria = ifelse(NAME == "Austria", 1, 0))
+  
+
+
+ggplot(worldmap) +
+  geom_sf(aes(fill = factor(austria))) +
+  ylim(30, 70) +
+  xlim(-20, 40) +
+  theme_bw() +
+  scale_fill_manual(values = c("gray82", "gray42")) +
+  theme(legend.position = "none")
+
+
+
+overview_map <- ggplot(worldmap) +
+  geom_sf(aes(fill = factor(austria))) +
+  geom_sf(data = studyarea, aes(fill = "Study area")) +
+  ylim(37, 70) +
+  xlim(-11, 35) +
+  theme_bw() +
+  scale_fill_manual(labels = c("Europe", "Austria", "Study area"), values = c("gray94","gray65", "gray42")) +
+  guides(fill = guide_legend(title = "")) 
+
+ggsave("../../../../../results/figures/overview_map.png", overview_map, width = 7, height = 5)
+ggsave("../../../../../results/figures/overview_map.pdf", overview_map, width = 8, height = 6, dpi = 300)
+
+ 
+
+
+
+# boxplots of disturbance metrics --------
+
+
+
+data <- read.csv("../data/tables/data_for_model.csv") %>%
+  mutate(process = case_when(
+    FST >= 1 ~ "FST",
+    DFLOOD >= 1  ~ "DFLOOD",
+    DFLOW >= 1 ~ "DFLOW", 
+    TRUE ~ "NO EVENT"),
+    event = ifelse(process != "NO EVENT" , "yes", "no")) %>%
+  mutate(process = factor(process, levels = c("NO EVENT","DFLOW","DFLOOD","FST"))) %>%
+  mutate(press = 1 - pulse) %>%
+  mutate(mean_extent = (extent/32)*100) %>%
+  mutate(sum = DFLOW+DFLOOD+FST) %>%
+  mutate(intens = case_when(sum > 5 ~ "> 5",
+                           sum == 0 ~ "0",#
+                           TRUE ~ "1 - 5"))
+
+
+ggplot(data, aes(x = factor(process), y = press)) +
+  geom_boxplot(fill = c("#d9f0d3","#a6dba0", "#5aae61", "#1b7837" )) +
+  theme_bw() +
+  labs(y = "Disturbance press") +
+  theme(axis.title.x = element_blank())
+
+ggplot(data, aes(x = factor(process), y = mean_extent)) +
+  geom_boxplot(fill = c("#d9f0d3","#a6dba0", "#5aae61", "#1b7837" )) +
+  theme_bw() +
+  labs(y = "% forest area disturbed / year") +
+  theme(axis.title.x = element_blank())
+
+
+
+
+# Point plotsm boxplots and ridges of forest related predictors  -------------------------------
+
+
+data <- read.csv("../data/tables/data_for_model.csv") %>%
+  mutate(process = case_when(
+    FST >= 1 ~ "FST",
+    DFLOOD >= 1  ~ "DFLOOD",
+    DFLOW >= 1 ~ "DFLOW", 
+    TRUE ~ "NO EVENT"),
+    event = ifelse(process != "NO EVENT" , "yes", "no")) %>%
+  mutate(process = factor(process, levels = c("NO EVENT","DFLOW","DFLOOD","FST"))) %>%
+  mutate(press = 1 - pulse) %>%
+  mutate(mean_extent = (extent/32)*100) %>%
+  mutate(sum = DFLOW+DFLOOD+FST) %>%
+  mutate(intens = case_when(sum > 5 ~ "> 5",
+                            sum == 0 ~ "0",#
+                            TRUE ~ "1 - 5"))
+
+data_long <- data %>%
+  select(WLK_ID, forest, patchdensity, extent, press, intens) %>%
+  mutate_at(.vars = vars(forest:press), function(x) (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE)) %>%
+  gather(key = predictor, value = value, forest:press) %>%
+  mutate(predictor = factor(predictor, levels = c("forest", "patchdensity", "extent", "press"))) %>%
+  mutate(intens = factor(intens, levels = c("0", "1 - 5", "> 5")))
+
+data_group <- data_long %>%
+  group_by(predictor, intens) %>%
+  summarize(mea = mean(value),
+            se = sd(value)) %>%
+  ungroup() %>%
+  mutate(predictor = factor(predictor, levels = c("forest", "patchdensity", "extent", "press"))) %>%
+  mutate(intens = factor(intens, levels = c("> 5", "1 - 5", "0")))
+
+
+forest_and_disturbances_point <- ggplot(data_group, aes(x = mea, y = predictor, colour = intens)) +
+         geom_point(size = 6, shape = 17) +
+  labs(y = "", x = "") +
+  theme_bw() +
+  guides(col = guide_legend(title = "Hazards")) +
+  scale_colour_manual(values = c("#c51b7d", "#f1b6da","#7fbc41")) +
+  scale_y_discrete(labels = c("Disturbance Press", "Canopy disturbed [%]", "Forest patches [n/km²]", "Forest [%]"))
+ 
+
+  
+ggsave("../../../../../results/figures/forest_and_disturbances_point.png", forest_and_disturbances_point, width = 6, height = 3)
+ggsave("../../../../../results/figures/forest_and_disturbances_point.pdf", forest_and_disturbances_point, width = 6, height = 3)
+
+forest_and_disturbances_boxplot <- ggplot(data_long, aes(x = predictor, y = value, fill = intens)) +
+  geom_boxplot() +
+  labs(y = "", x = "") +
+  ylim(-2.5, 2.5) +
+  theme_bw() +
+  guides(fill = guide_legend(title = "Hazards")) +
+  scale_fill_manual(values = c("#7fbc41", "#f1b6da", "#c51b7d")) +
+  scale_x_discrete(labels = c("Forest share [%]","Forest patches [n/km²]", "Canopy disturbed [%]", "Disturbance Press")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+ggsave("../../../../../results/figures/forest_and_disturbances_boxplot.png", forest_and_disturbances_boxplot, width = 6, height = 4)
+ggsave("../../../../../results/figures/forest_and_disturbances_boxplot.pdf", forest_and_disturbances_boxplot, width = 6, height = 3)
+
+
+forest_and_disturbances_ridges <- ggplot(data_long, aes(x = value, y = predictor,  fill = intens)) +
+  geom_density_ridges(scale = 0.95, alpha = 0.8) +
+  labs(y = "", x = "") +
+  theme_bw() +
+  xlim(-3, 4)+
+  guides(fill = guide_legend(title = "Hazards")) +
+  scale_fill_manual(values = c("#c51b7d", "#f1b6da","#7fbc41")) +
+  scale_y_discrete(labels = c("Disturbance Press","Canopy disturbed [%]",  "Forest patches [n/km²]", "Forest [%]"))
+
+ggsave("../../../../../results/figures/forest_and_disturbances_ridges.png", forest_and_disturbances_ridges, width = 6, height = 3)
+ggsave("../../../../../results/figures/forest_and_disturbances_ridges.pdf", forest_and_disturbances_ridges, width = 9, height = 6)
+
+
+
+# Point plot of final predictors ------------------------------
+
+
+
+p_predictors_points <- read.csv("../data/tables/data_for_model.csv") %>%
+  select(WLK_ID,area, h_mean, Elevation, Melton, Elongation, Circularit, forest, patchdensity, extent, pulse) %>%
+  mutate(press = 1 - pulse,
+         forest = forest*100,
+         extent = extent*100) %>%
+  select(- pulse) %>%
+  rename("Area [km²]" = area, 
+         "Elevation [m]" = h_mean, 
+         "Elevation ratio" = Elevation,
+         "Meltion ratio" = Melton,
+         Circularity = Circularit,
+         "Forest cover [%]" = forest,
+         "Forest patches [n/km²]" = patchdensity,
+         "Forest area disturbed [%]" = extent,
+         "Disturbance press" = press) %>%
+  gather(key = predictor, value = value, "Area [km²]":"Disturbance press") %>%
+  group_by(predictor) %>%
+  summarize(mean = mean(value),
+            min = min(value),
+            max = max(value)) %>%
+  gather(key = term, value = value, mean:max) %>%
+  ggplot(., aes(x = value, y = "", colour = term)) +
+  geom_point(shape = 17, size = 4) +
+  facet_wrap( ~predictor, scales = "free") +
+  labs(y = "", x = "") +
+  theme_few() +
+  guides(col = guide_legend(title = "")) +
+  scale_colour_manual(values = c("#c51b7d","#7fbc41", "#f1b6da"))
+
+
+ggsave("../../../../../results/figures/p_predictors_points.png", p_predictors_points, width = 8, height = 6)
+
+
+
+# Violoin plot of final predictors -----------------------------------------
+
+
+p_predictors_violin_gen <- read.csv("../data/tables/data_for_model.csv") %>%
+  dplyr::select(WLK_ID,area, h_mean) %>%
+  rename("Area [km²]" = area, 
+         "Mean elevation [m]" = h_mean) %>%
+  gather(key = predictor, value = value, "Area [km²]":"Mean elevation [m]") %>%
+  mutate(predictor = factor(predictor, levels = c("Area [km²]", "Mean elevation [m]"))) %>%
+  ggplot(., aes(x = "", y = value)) +
+  geom_violin(fill = "#ffffbf") +
+  facet_wrap(~ predictor, scales = "free") +
+  theme_few() +
+  labs(y = "", x = "", title = "General")  +
+  guides(fill = FALSE)
+
+
+p_predictors_violin_geo <- read.csv("../data/tables/data_for_model.csv") %>%
+  dplyr::select(WLK_ID, Elevation, Melton, Elongation, Circularit) %>%
+  rename("Elevation ratio" = Elevation,
+         "Meltion ratio" = Melton,
+         "Circularity" = Circularit) %>%
+  gather(key = predictor, value = value, "Elevation ratio":"Circularity") %>%
+  mutate(predictor = factor(predictor, levels = c("Elevation ratio", "Meltion ratio", "Elongation", "Circularity"))) %>%
+  ggplot(., aes(x = "", y = value)) +
+  geom_violin(fill = "#4393c3") +
+  facet_wrap(~ predictor, scales = "free") +
+  theme_few() +
+  labs(y = "", x = "", title = "Geomorphological")  +
+  guides(fill = FALSE)
+
+p_predictors_violin_forest <- read.csv("../data/tables/data_for_model.csv") %>%
+  dplyr::select(WLK_ID, forest, patchdensity, extent, pulse) %>%
+  mutate(press = 1 - pulse,
+         forest = forest*100,
+         extent = extent*100) %>%
+  dplyr::select(- pulse) %>%
+  rename("Forest cover [%]" = forest,
+         "Forest patches [n/km²]" = patchdensity,
+         "Canopy disturbed [%]" = extent,
+         "Disturbance press" = press) %>%
+  gather(key = predictor, value = value, "Forest cover [%]":"Disturbance press") %>%
+  mutate(predictor = factor(predictor, levels = c("Forest cover [%]", "Forest patches [n/km²]", "Canopy disturbed [%]", "Disturbance press" ))) %>%
+  ggplot(., aes(x = "", y = value)) +
+  geom_violin(fill = "#276419") +
+  facet_wrap(~ predictor, scales = "free") +
+  theme_few() +
+  labs(y = "", x = "", title = "Forest related")  +
+  guides(fill = FALSE)
+
+
+p_predictors_arranged <- grid.arrange( p_predictors_violin_gen, p_predictors_violin_geo, p_predictors_violin_forest, ncol = 3)
+
+
+ggsave("../../../../../results/figures/p_predictors_arranged.pdf", p_predictors_arranged, width = 11.5, height = 5, dpi = 300)
+ggsave("../../../../../results/figures/p_predictors_arranged.png", p_predictors_arranged, width = 11, height = 5)
+
+
+
+
+# Numbers of final dataset ------------------------------------------------
+
+
+data <- read.csv("../data/tables/data_for_model.csv") 
+
+study_area_km2 <- sum(data$area)
+austria_km2 <- 83879
+
+study_area_km2/austria_km2 *100
+
+forest_km2 <- study_area_km2*(mean(data$forest))
+
+austria_forest <- 40000
+
+forest_km2/austria_forest
+
+forest_km2*mean(data$extent)
+
+events <- sum(data$DFLOW) + sum(data$DFLOOD) + sum(data$FST)
+
+watersheds <- nrow(data)
+
+ 
