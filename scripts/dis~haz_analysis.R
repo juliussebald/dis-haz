@@ -148,9 +148,9 @@ models %>%
 
 ### Decide for final model
 
-final_models <- models %>% map2(.y = c(2, 3, 3), ~ .[[.y]])
+#final_models <- models %>% map2(.y = c(2, 3, 3), ~ .[[.y]])
 
-final_models <- models %>% map2(.y = c(2, 3, 3), ~ .[[2]])
+final_models <- models %>% map(., ~ .[[2]])
 
 ### Calculate LOO AUC for final model
 
