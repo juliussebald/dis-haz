@@ -241,7 +241,7 @@ write_csv(ecounit_effects, "../results/two_processes/count/ecounit_effects_count
 ggsave("ecounit_effects_count.pdf", p_ecounit_effects, path = "../results/two_processes/count/", width = 5, height = 2.5)
 ggsave("ecounit_effects_count.png", p_ecounit_effects, path = "../results/two_processes/count/", width = 5, height = 2.5)
 
-# Create response curve plots ---------------------------------------------
+# Expected counts plot ---------------------------------------------
 
 # DCOMBINE
 
@@ -266,7 +266,7 @@ response_disturbance[, "sd"] <- apply(predictions, 2, sd)
 
 p_response_dcombine <- response_disturbance %>%
   mutate(press = factor(press, labels =  c("Pulse", "Average", "Press"))) %>%
-  mutate(extent = factor(extent, labels =  c("Low extent", "Average extent", "High extent"))) %>%
+  mutate(extent = factor(extent, labels =  c("Low extent", "Average extent", "Large extent"))) %>%
   split(list(.$press, .$extent)) %>%
   map(~ data.frame(count = 1:3, 
                    prop = dpois(x = 1:3, lambda = .$mean),
