@@ -230,7 +230,7 @@ p_ecounit_effects <- ggplot(ecounit_effects, aes(x = fct_rev(eco_unit), y = exp(
   theme(strip.background = element_blank()) +
   geom_hline(data = ecounit_effects %>% group_by(process) %>% summarize(m = mean(exp(intercept))),
              aes(yintercept = m), linetype = "dashed", col = scales::muted("red")) +
-  labs(y = "Posterior probability distribution of parameter estimates", x = "Ecological unit", fill = "Process") +
+  labs(y = "Effect size", x = "Ecological unit", fill = "Process") +
   scale_fill_brewer(palette = "Greys", direction = -1) +
   facet_wrap(~process) +
   scale_x_discrete(labels = c("9","8","7","6","5","4","3","2","1"))
@@ -275,7 +275,7 @@ p_response_dcombine <- response_disturbance %>%
   bind_rows(.id = "id") %>%
   separate("id", c("press", "extent"), "\\.") %>%
   mutate(press = factor(press, levels =  c("Press", "Average", "Pulse"))) %>%
-  mutate(extent = factor(extent, levels =  c("Low extent", "Average extent", "High extent"))) %>%
+  mutate(extent = factor(extent, levels =  c("Low extent", "Average extent", "Large extent"))) %>%
   ggplot(., aes(x = as.factor(count), y = prop, fill = press)) +
   geom_bar(stat = "identity", position = "dodge") +
   geom_errorbar(aes(ymin = prop_lwr, ymax = prop_upr), position = position_dodge(width = 0.9), width = 0.25) +
@@ -284,7 +284,8 @@ p_response_dcombine <- response_disturbance %>%
         legend.position = "none",
         legend.justification = c(1, 1),
         panel.grid = element_blank(),
-        strip.background = element_blank()) +
+        strip.background = element_blank(),
+        plot.title = element_text(size = 11)) +
   labs(x = "Number of events", y = "Probability", 
        fill = "Disturbance type", title = "a) Mud-flow") +
   scale_fill_brewer(palette = "Set1") +
@@ -329,12 +330,13 @@ p_response_fst <- response_disturbance %>%
         legend.position = "right",
         legend.justification = c(1, 1),
         panel.grid = element_blank(),
-        strip.background = element_blank()) +
+        strip.background = element_blank(),
+        plot.title = element_text(size = 11)) +
   labs(x = "Number of events", y = "Probability", 
        fill = "Disturbance type", title = "b) Sediment-flow") +
   scale_fill_brewer(palette = "Set1") +
   guides(fill = guide_legend(ncol = 1, 
-                             keywidth = 0.1,
+                             keywidth = 0.15,
                              keyheight = 0.1,
                              default.unit = "inch"))
 

@@ -108,7 +108,7 @@ for (process in processes) {
 }
 
 save(models, file = "../results/two_processes/binomial/models_binomial.RData")
-load(file =  "../results/two_processes/binomial/models_count.RData")
+load(file =  "../results/two_processes/binomial/models_binomial.RData")
 
 # Model evaluation -------------------------------------------------------------
 
@@ -216,7 +216,7 @@ p_estimates <- ggplot(estimates, aes(x = fct_rev(name), y = value)) +
   coord_flip() +
   theme(strip.background = element_blank()) +
   geom_hline(yintercept = 0, linetype = "dashed", col = scales::muted("red")) +
-  labs(y = "Posterior probability distribution of parameter estimates", x = NULL) +
+  labs(y = "Effect size", x = NULL) +
   #scale_fill_brewer(palette = "Greys", direction = -1) +
   facet_wrap(~process) +
   scale_fill_manual(values = c("#276419","#ffffbf", "#4393c3"), breaks = c("  General", "  Geomorphological", "  Forest related" )) +
@@ -298,18 +298,20 @@ p_response_dcombine <- response_disturbance %>%
   theme(legend.background = element_blank(),
         panel.grid = element_blank(),
         strip.background = element_blank(),
+        plot.title = element_text(size = 10),
         legend.position = c(0, 1),
         legend.justification = c(0, 1),
         legend.title = element_text(size = 9)) +
   scale_color_manual(values = c(scales::muted("blue"), "grey", scales::muted("red")), breaks = c("Press", "Average", "Pulse")) +
   scale_fill_manual(values = c(scales::muted("blue"), "grey", scales::muted("red")), breaks = c("Press", "Average", "Pulse")) +
   labs(x = "Disturbance extent", y = "Probability of event", 
-       fill = "Disturbance type", col = "Disturbance type") +
+       fill = "Disturbance type", col = "Disturbance type",
+       title = "Mud-flow") +
   guides(fill = guide_legend(ncol = 1, 
                              keywidth = 0.1,
                              keyheight = 0.1,
                              default.unit = "inch"))
 
-ggsave("response_curve_binomial.png", p_response_dcombine, path = "../results/two_processes/binomial/", width = 5.5, height = 2.5)
-ggsave("response_curve_binomial.pdf", p_response_dcombine, path = "../results/two_processes/binomial/", width = 5.5, height = 2.5, dpi = 300)
+ggsave("response_curve_binomial.png", p_response_dcombine, path = "../results/two_processes/binomial/", width = 3.5, height = 3.5)
+ggsave("response_curve_binomial.pdf", p_response_dcombine, path = "../results/two_processes/binomial/", width = 3.5, height = 3.5)
 
