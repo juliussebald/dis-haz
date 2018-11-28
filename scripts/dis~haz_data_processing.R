@@ -6,24 +6,14 @@
 
 {
 
-library(dplyr)# version 0.7.5
-library(raster)# version 2.6-7
-library(sp)# version 1.3-1
-library(rgdal)# version 1.2-20
-library(igraph)# version 1.2.1
-library(ggplot2)# version 3.0.0
-library(tidyverse)
-library(data.table)
-library(sf)
+library(raster) # version 2.6-7
+library(sp) # version 1.3-1
+library(rgdal) # version 1.3-4
+library(igraph) # version 1.2.2
+library(tidyverse) # version 1.2.1
+library(data.table) # version 1.11.4
+library(sf) # version 0.6-3
 
-
-#server <- "/home/jsebald/upload_to_server"
-local <- "D:/JULIUS/PhD/Projects/disturbances_and_natural_hazards/"
-
-setwd(local)
-#setwd(server)
-
-rm(list=ls())
 }
 
 
@@ -31,35 +21,36 @@ rm(list=ls())
 
 # shapefile of watersheds with event
 
-shp_ws1 <- sf::read_sf("materials/raw_data/data_natural_hazards/GroupEvents_final.shp")
+shp_ws1 <- sf::read_sf("../../../../../materials/raw_data/data_natural_hazards/GroupEvents_final.shp")
 
 # shapefile of watersheds without event
 
-shp_ws0 <- sf::read_sf("materials/raw_data/data_natural_hazards/GroupNOEvents_final.shp")
+shp_ws0 <- sf::read_sf("../../../../../materials/raw_data/data_natural_hazards/GroupNOEvents_final.shp")
 
 # landcover data
 
-landcover <- raster("materials/raw_data/data_landcover/europe_landcover2015_lc3_3year_austria.tif") 
+landcover <- raster("../../../../../materials/raw_data/data_landcover/europe_landcover2015_lc3_3year_austria.tif") 
 
 # disturbance data
 
-disturbance <- raster("materials/raw_data/data_disturbances/austria_ensemble_aggregate32_19862016_firstdisturbance_laea_mmu6.tif")
+disturbance <- raster("../../../../../materials/raw_data/data_disturbances/austria_ensemble_aggregate32_19862016_firstdisturbance_laea_mmu6.tif")
 disturbance <- projectRaster(disturbance, landcover, method = "ngb") 
-writeRaster(disturbance, "methods/r/data_processed/rasters/disturbance.tif")
+writeRaster(disturbance, "../../../../../materials/data_processed/rasters/disturbance.tif")
 
-disturbance <- raster("methods/r/data_processed/rasters/disturbance.tif")
+disturbance <- raster("../../../../../materials/data_processed/rasters/disturbance.tif")
+
 
 # DEM austria
 
-dem_austria <- raster("methods/r/data_processed/rasters/dem_austria.tif")
+dem_austria <- raster("../../../../../materials/data_processed/rasters/dem_austria.tif")
 
 # natural hazard events
 
-events <- read.csv("materials/raw_data/data_natural_hazards/GroupEvents.csv") 
+events <- read.csv("../../../../../materials/raw_data/data_natural_hazards/GroupEvents.csv") 
 
-# ecological units
+# ecological regions
 
-eco <- sf::read_sf("materials/raw_data/shapefiles_ecological_units/WLamPoly.shp")
+eco <- sf::read_sf("../../../../../materials/raw_data/shapefiles_ecological_units/WLamPoly.shp")
 
 # Clean shp_ws1 and shp_ws0 to build rasterfile of complete studyarea ----------------------------
 
@@ -76,6 +67,8 @@ res(ras) <- res(landcover)
 crs(ras) <- crs(landcover)
 rast_ws1 <- rasterize(shp_ws1, ras, field = "WLK_ID")
 raster_ws1 <- projectRaster(rast_ws1, landcover, method = "ngb")
+
+#raster_ws1 <- raster("../../../old/data_processed/rasters/raster_ws1.tif")
 
 # i don`t no why but obviously the rasterize function eats 8 out of the 2204 watersheds and gives them the IDs of the surrounding watershed. 
 # after some back and forth i decided to simply filter them out after the area is included in the surrounding watershed anyways
@@ -156,21 +149,20 @@ events_clean_new <- bind_rows(events_clean, events_in_eaten)
 
 events_ws <- events_clean_new %>%   #CHECK WHAT IS ACTUALLY NEEDED FOR THE MODEL!!!!
   rename(year = ereignis_jahr) %>%
-  mutate(Event = case_when(
-    prozessart == "Fluviatiler Feststofftransport" ~ "FST",
-    prozessart ==  "Murartiger Feststofftransport" ~ "DFLOOD",
-    prozessart == "Murgang" ~ "DFLOW")) %>%
+  mutate(Event = case_when(prozessart ==  "Murartiger Feststofftransport" ~ "MFL",
+    prozessart == "Murgang" ~ "MFL",
+    prozessart == "Fluviatiler Feststofftransport" ~ "FST")) %>%                                            
   dplyr::select(WLK_ID, year, Event) %>%
   group_by(Event, WLK_ID) %>%
   summarize(n_eve = n()) %>%
   spread(key = Event, value = n_eve) %>%
-  mutate_at(.vars = vars(DFLOOD, DFLOW, FST), function(x) ifelse(is.na(x), 0, x))
+  mutate_at(.vars = vars(MFL, FST), function(x) ifelse(is.na(x), 0, x))
 
 summary(events_ws)
 
-write_csv(events_ws, "methods/r/data_processed/dataframes/events_ws.csv")
+write_csv(events_ws, "../../../../../materials/data_processed/dataframes/temp/events_ws.csv")
 
-events_ws <- read.csv("methods/r/data_processed/dataframes/temp/events_ws.csv") 
+events_ws <- read.csv("../../../../../materials/data_processed/dataframes/temp/events_ws.csv") 
 
 # create vector of WLK_IDs of shp_ws1_new
 
@@ -192,9 +184,9 @@ temp_ws0 <- shp_ws0[,1]
 
 shp_ws <- rbind(temp_ws1, temp_ws0)
 
-writeOGR(shp_ws, "methods/r/data_processed/shapefiles", layer = "shp_ws", driver = "ESRI Shapefile")
+write_sf(shp_ws, "../../../../../materials/data_processed/shapefiles/shp_ws.shp")
 
-shp_ws <- sf::read_sf("methods/r/data_processed/shapefiles/shp_ws.shp")
+shp_ws <- sf::read_sf("../../../../../materials/data_processed/shapefiles/shp_ws.shp")
 
 # create vector of WLK_IDs of final studyarea
 
@@ -209,24 +201,24 @@ crs(ras_ws) <- crs(landcover)
 rast_ws <- rasterize(shp_ws, ras_ws, field = "WLK_ID")
 raster_ws <- projectRaster(rast_ws, landcover, method = "ngb")
 
-writeRaster(raster_ws, "methods/r/data_processed/rasters/raster_ws.tif")
+writeRaster(raster_ws, "../../../../../materials/data_processed/rasters/raster_ws.tif")
 
 
 # Data spatial ---------------------------------------------------
 
 # load rasterfile of all watersheds
 
-raster_ws <- raster("methods/r/data_processed/rasters/raster_ws.tif")
+raster_ws <- raster("../../../../../materials/data_processed/rasters/raster_ws.tif")
 
 
 # Geomorphology -----------------------------------------------------------
 
-df_ws1 <- as_data_frame(shp_ws1) %>%
-  dplyr::select(WLK_ID, area, Melton___, Elevation, Circularit, Relief_rat, Elongation, Form_facto) %>% 
+df_ws1 <- as.data.frame(shp_ws1) %>%
+  dplyr::select(WLK_ID, area, Melton___, Elevation, Circularit, Relief_rat, Elongation) %>%      
   rename (Melton = Melton___)
 
-df_ws0 <- as_data_frame(shp_ws0) %>%
-  dplyr::select(- ART_IDX) %>%
+df_ws0 <- as.data.frame(shp_ws0) %>%
+  dplyr::select(- ART_IDX, - Form_facto, - geometry) %>%
   rename(Melton = MELTON, Elevation = Err)
 
 geomorphology_ws <- bind_rows(df_ws1, df_ws0) %>%
@@ -234,9 +226,9 @@ geomorphology_ws <- bind_rows(df_ws1, df_ws0) %>%
 
 summary(geomorphology_ws)
 
-write_csv(geomorphology_ws, "methods/r/data_processed/dataframes/old/geomorpholgy_ws.csv")
+write_csv(geomorphology_ws, "../../../../../materials/data_processed/dataframes/temp/geomorpholgy_ws.csv")
 
-geomorphology_ws <- read.csv("methods/r/data_processed/dataframes/temp/geomorpholgy_ws.csv") 
+geomorphology_ws <- read.csv("../../../../../materials/data_processed/dataframes/temp/geomorpholgy_ws.csv") 
   
 # Landcover and topography ---------------------------------------------------------------
 
@@ -246,21 +238,21 @@ geomorphology_ws <- read.csv("methods/r/data_processed/dataframes/temp/geomorpho
 artif <- mask(landcover == 1, landcover, maskvalue = 2 , updatevalue= 0)
 forest <- mask(landcover %in% c(4:6), landcover, maskvalue = 1 , updatevalue= 0) 
 clumps <- clump(forest, directions = 8, gaps = F)
-slope <- terrain(dem_austria, opt = "slope", neighbours = 8, unit = "degrees") # slope was exclude becaus of correlation with Melton Ratio
+#slope <- terrain(dem_austria, opt = "slope", neighbours = 8, unit = "degrees") # slope was exclude because of correlation with Melton Ratio
 
 # store rasters, otherwise environemnt will get very large very soon
 
-writeRaster(artif, "methods/r/data_processed/rasters/artif.tiff")
-writeRaster(forest, "methods/r/data_processed/rasters/forest.tiff")
-writeRaster(clumps, "methods/r/data_processed/rasters/clumps.tiff")
-writeRaster(slope, "methods/r/data_processed/rasters/slope.tiff")
+writeRaster(artif, "../../../../../materials/data_processed/rasters/artif.tiff")
+writeRaster(forest, "../../../../../materials/data_processed/rasters/forest.tiff")
+writeRaster(clumps, "../../../../../materials/data_processed/rasters/clumps.tiff")
+#writeRaster(slope, "../../../../../materials/data_processed/rasters/slope.tiff")
 
 # after creating and storeing the landcover rasters they can be loaded in from the harddrive
 
-artif <- raster("methods/r/data_processed/rasters/artif.tif")
-forest <- raster("methods/r/data_processed/rasters/forest.tif")
-clumps <- raster("methods/r/data_processed/rasters/clumps.tif")
-dem_austria <- raster("methods/r/data_processed/rasters/dem_austria.tif")
+artif <- raster("../../../../../materials/data_processed/rasters/artif.tif")
+forest <- raster("../../../../../materials/data_processed/rasters/forest.tif")
+clumps <- raster("../../../../../materials/data_processed/rasters/clumps.tif")
+dem_austria <- raster("../../../../../materials/data_processed/rasters/dem_austria.tif")
 
 
 # calculate forest-cover, share of artfical landcover (buidlings, infrastructure) and forest-patchdensity for every watershed
@@ -281,9 +273,9 @@ landcover_ws <- values_landcover %>%
 
 summary(landcover_ws)
 
-write_csv(landcover_ws,"methods/r/data_processed/dataframes/old/landcover_ws.csv")
+write_csv(landcover_ws,"../../../../../materials/data_processed/dataframes/temp/landcover_ws.csv")
 
-landcover_ws <- read.csv("methods/r/data_processed/dataframes/temp/landcover_ws.csv")
+landcover_ws <- read.csv("../../../../../materials/data_processed/dataframes/temp/landcover_ws.csv")
 
 
 # calculate mean elevation for every watershed
@@ -300,12 +292,12 @@ topography_ws <- values_topography %>%
 
 summary(topography_ws)
 
-write_csv(topography_ws, "methods/r/data_processed/dataframes/temp/topography_ws.csv")
-topography_ws <- read.csv("methods/r/data_processed/dataframes/temp/topography_ws.csv")
+write_csv(topography_ws, "../../../../../materials/data_processed/dataframes/temp/topography_ws.csv")
+topography_ws <- read.csv("../../../../../materials/data_processed/dataframes/temp/topography_ws.csv")
 
 
 
-# Ecological units --------------------------------------------------------
+# Ecological regions --------------------------------------------------------
 
 eco$Wuchsge1 <- as.integer(as.character(eco$Wuchsge1))
 
@@ -316,26 +308,26 @@ crs(ras) <- crs(landcover)
 rast_eco <- rasterize(eco, ras, field = "Wuchsge1")
 eco_units <- projectRaster(rast_eco, landcover, method = "ngb")
 
-writeRaster(eco_units, "methods/r/data_processed/rasters/eco_units.tif")
+writeRaster(eco_units, "../../../../../materials/data_processed/rasters/eco_units.tif")
 
-eco_units <- raster("methods/r/data_processed/rasters/eco_units.tif")
+eco_regions <- raster("../../../../../materials/data_processed/rasters/eco_units.tif")
 
 values_eco <- data.table(WLK_ID = values(raster_ws),
-                         eco_unit = values(eco_units)) %>%
+                         eco_region = values(eco_regions)) %>%
   filter(!is.na(WLK_ID)) %>%
-  filter(!is.na(eco_unit))
+  filter(!is.na(eco_region))
 
 summary(values_eco)
 
 eco_ws <- values_eco %>%
   group_by(WLK_ID) %>%
-  summarise(eco_unit = raster::modal(eco_unit))
+  summarise(eco_region = raster::modal(eco_region))
 
 
 summary(eco_ws)
 
-write_csv(eco_ws, "methods/r/data_processed/dataframes/temp/eco_ws.csv")
-eco_ws <- read.csv("methods/r/data_processed/dataframes/temp/eco_ws.csv")
+write_csv(eco_ws, "../../../../../materials/data_processed/dataframes/temp/eco_ws.csv")
+eco_ws <- read.csv("../../../../../materials/data_processed/dataframes/temp/eco_ws.csv")
 
 
 # Disturbances ------------------------------------------------------------
@@ -347,19 +339,19 @@ values_disturbance <- data.table(WLK_ID = values(raster_ws),
   filter(!is.na(WLK_ID)) 
 
 
+
 disturbance_ws <- values_disturbance %>%
   group_by(WLK_ID) %>%
   summarise(extent = sum(disturbance > 0) / sum(forest),
-            pulse = DescTools::Gini(table(factor(disturbance[disturbance > 0], levels = 1986:2016))),
-            rel_years = (length(unique(disturbance))-1)/31) %>%
+            type = DescTools::Gini(table(factor(disturbance[disturbance > 0], levels = 1986:2016))))%>%                                           
   mutate_all(function(x) ifelse(is.na(x) | is.nan(x), 0, x))
 
 disturbance_ws[disturbance_ws$extent > 1, "extent"] <- 1 # some watersheds had disturbance extent > 1 (which is not possible) so i set them to 1
 
 summary(disturbance_ws)
 
-write_csv(disturbance_ws, "methods/r/data_processed/dataframes/temp/disturbance_ws.csv")
-disturbance_ws <- read.csv("methods/r/data_processed/dataframes/temp/disturbance_ws.csv")
+write_csv(disturbance_ws, "../../../../../materials/data_processed/dataframes/temp/disturbance_ws.csv")
+disturbance_ws <- read.csv("../../../../../materials/data_processed/dataframes/temp/disturbance_ws.csv")
 
 
 
@@ -374,11 +366,11 @@ data_for_model <- geomorphology_ws %>%
   left_join(eco_ws, by = "WLK_ID") %>%
   mutate(patchdensity = clumps / area) %>%
   dplyr::select(-clumps) %>%
-  mutate_at(.vars = vars(DFLOOD, DFLOW, FST), function(x) ifelse(is.na(x), 0, x))
+  mutate_at(.vars = vars(MFL, FST), function(x) ifelse(is.na(x), 0, x))             
 
 
 summary(data_for_model)
 
-write_csv(data_for_model, "methods/r/git/dis-haz/data/tables/data_for_model.csv")
-write_csv(data_for_model, "methods/r/data_processed/dataframes/data_for_model_20181015.csv")
+write_csv(data_for_model, "../data/data_for_model.csv")
+write_csv(data_for_model, "../../../../../materials/data_processed/dataframes/data_for_model_20181128.csv")
 

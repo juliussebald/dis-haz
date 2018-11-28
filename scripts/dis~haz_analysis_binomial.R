@@ -3,16 +3,18 @@
 
 {
   Sys.setenv(USE_CXX14 = 1)
-  library(raster)# version 2.6-7
-  library(sp)# version 1.3-1
-  library(rgdal)# version 1.2-20
-  library(igraph)# version 1.2.1
-  library(tidyverse)# version 1.2.1
-  library(rstanarm)# version 2.1.7.4
-  library(projpred)# version 0.8.0
-  library(multiscales)#devtools::install_github("clauswilke/multiscales")
-  library(patchwork)
-  library(rstan)
+  library(raster) # version 2.6-7
+  library(sp) # version 1.3-1
+  library(rgdal) # version 1.3-4
+  library(igraph) # version 1.2.2
+  library(tidyverse) # version 1.2.1
+  library(rstanarm) # version 2.17.4
+  library(projpred )# version 0.8.0
+  library(multiscales) # version 0.1.0 # devtools::install_github("clauswilke/multiscales")
+  library(patchwork) # version 0.0.1
+  library(rstan) # version 2.17.4
+  library(sf) # version 0.6-3
+  library(gridExtra) # version 2.3
   
   options(mc.cores = parallel::detectCores())
   rstan_options(auto_write = TRUE)
@@ -21,14 +23,10 @@
 
 # Load data ---------------------------------------------------------------
 
-data <- read.csv("../data/tables/data_for_model.csv") %>% 
-  mutate(press = 1 - pulse) %>%
-  mutate(DCOMBINE = DFLOOD + DFLOW)
+data <- read.csv("../data/data_for_model.csv") 
 
-data$eco_unit <- as.factor(data$eco_unit) 
-
-processes <- c("DCOMBINE", "FST")
-processes_names <- c("Mud-flow", "Sediment-flow")
+processes <- c("MFL", "FST")
+processes_names <- c("Mud-flow", "Sediment-transport")
 
 # Selecting a model -----------------------------------------------
 
@@ -36,16 +34,16 @@ processes_names <- c("Mud-flow", "Sediment-flow")
 
 vars_ws <- data.frame(varname = c("h_mean", "Melton", "Elevation", "Circularit", "Elongation", 
                                   "artifical", "forest", "area", "patchdensity", 
-                                  "eco_unit", 
+                                  "eco_region", 
                                   "extent", 
-                                  "press",
-                                  "extent:press"), 
+                                  "type",
+                                  "extent:type"), 
                       name = c("Elevation", "Melton ratio", "Elevation ratio", "Circularity", "Elongation", 
                                "Artificial", "Forest", "Area", "Patch density", 
-                               "Forest region", 
+                               "Ecological region", 
                                "Extent", 
-                               "Press",
-                               "Extent x Press"),
+                               "Type",
+                               "Extent x Type"),
                       stringsAsFactors = FALSE)
 
 # Loop through processes and calibrate varying models
@@ -61,19 +59,34 @@ for (process in processes) {
   # Bring data into form
   
   vars_nointeraction <- vars_ws %>% 
-    filter(!varname %in% c("extent:press", "eco_unit"))
+    filter(!varname %in% c("extent:type", "eco_region"))
   
   data_model <- data
-  data_model[data_model$extent == 0, "press"] <- NA
+  
+  # make sure that have not excpierienced any disturbances have NA as "disturbance type"
+  
+  data_model[data_model$extent == 0, "type"] <- NA
+  
+  # z-transform predictors
+  
   data_model <- data_model %>%
     mutate_at(.vars = vars(c(vars_nointeraction$varname)), function(x) (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE))
+  
+  # devide dataset in watershed which have had a torrential hazard event (1) and watersheds which had no torrential hazard event (0)
+  
   data_model[, "response"] <- ifelse(data_model[, process] > 0, 1, 0)
-  data_model[data_model$extent == min(data_model$extent), "press"] <- 0
-  data_model$eco_unit <- as.factor(data_model$eco_unit)
+  
+  # make sure that watersheds which have not expierienced any disturbances are set to disturbance type "avarage"
+  
+  data_model[data_model$extent == min(data_model$extent), "type"] <- 0
+  
+  # transform eco region predictor to factor
+  
+  data_model$eco_region <- as.factor(data_model$eco_region)
   
   # Fit watershed-only model
   
-  fit_ws_only <- stan_glm(as.formula(paste0("response ~ ", paste0(paste(vars_ws$varname[-which(vars_ws$varname %in% c("extent", "press", "extent:press"))], collapse = "+")))),
+  fit_ws_only <- stan_glm(as.formula(paste0("response ~ ", paste0(paste(vars_ws$varname[-which(vars_ws$varname %in% c("extent", "type", "extent:type"))], collapse = "+")))),
                           data = data_model,
                           family = binomial,
                           prior = normal(0, 0.5, autoscale = TRUE),
@@ -81,13 +94,15 @@ for (process in processes) {
                           prior_aux = exponential(rate = 1, autoscale = TRUE),
                           QR = TRUE)
   
+  # Calculate loo for watershed-pnly model
+  
   loo_fit_ws_only <- loo(fit_ws_only)
   
   # Include disturbance predictors
   
-  fit_full_exp <- update(fit_ws_only, . ~ . + extent * press)
+  fit_full_exp <- update(fit_ws_only, . ~ . + extent * type)
   
-  # calculate loo for full model
+  # Calculate loo for full model
   
   loo_fit_full_exp <- loo(fit_full_exp)
   
@@ -107,8 +122,9 @@ for (process in processes) {
                        
 }
 
-save(models, file = "../results/two_processes/binomial/models_binomial.RData")
-load(file =  "../results/two_processes/binomial/models_binomial.RData")
+save(models, file = "../results/binomial/models_binomial.RData")
+
+load(file =  "../results/binomial/models_binomial.RData")
 
 # Model evaluation -------------------------------------------------------------
 
@@ -162,7 +178,10 @@ model_performances <- elpds_ws_only_model %>%
   left_join(elpds_full_model, by = "process") %>%
   left_join(elpds_difference, by = "process")
 
-write_csv(model_performances, "../results/two_processes/binomial/model_performances_binomial.csv")
+write_csv(model_performances, "../results/binomial/model_performances_binomial.csv")
+
+write_csv(model_performances, "../../../../../results/tables/model_performances_binomial.csv")
+
 
 ### Extract final model
 
@@ -174,7 +193,7 @@ pred_posterior_full <- final_models %>%
   map(~ posterior_predict(., draws = 100))
 
 ppc_mean <- pred_posterior_full %>%
-  map2(.y = list(data$DCOMBINE, data$FST),
+  map2(.y = list(data$MFL, data$FST),
        ~ bayesplot::ppc_stat(y = ifelse(.y > 0, 1, 0),
                              yrep = .x,
                              stat = "mean")) %>%
@@ -188,7 +207,11 @@ ppc_mean <- pred_posterior_full %>%
          labs(title = .y, x = "Mean probability", y = "Count")) %>%
   patchwork::wrap_plots(.)
 
-ggsave("ppc_binomial.pdf", ppc_mean, path = "../results/two_processes/binomial/", width = 5.5, height = 2.5)
+ggsave("ppc_binomial.pdf", ppc_mean, path = "../results/binomial/", width = 5.5, height = 2.5)
+
+ggsave("ppc_binomial.pdf", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 2.5)
+ggsave("ppc_binomial.png", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 2.5)
+
 
 # Extract and plot estimates ----------------------------------------------
 
@@ -199,13 +222,13 @@ estimates <- final_models %>%
         left_join(vars_ws, by = "varname")) %>%
   set_names(processes_names) %>%
   bind_rows(.id = "process") %>%
-  filter(!varname %in% c(paste0("eco_unit", 1:9))) %>% 
+  filter(!varname %in% c(paste0("eco_region", 1:9))) %>% 
   mutate(name = factor(name, levels = c("Area", "Artificial", "Elevation", "Elevation ratio", "Circularity", 
                                         "Melton ratio", "Elongation", "Forest", "Patch density", "Extent", 
-                                        "Press", "Extent x Press"))) %>%
+                                        "Type", "Extent x Type"))) %>%
   mutate(type = case_when(name %in% c("Area", "Elevation", "Artificial") ~ "General",
                           name %in% c ("Elevation ratio", "Circularity", "Melton ratio", "Elongation") ~ "Geomorphological",
-                          name %in% c("Forest", "Patch density", "Extent", "Press", "Extent x Press") ~ "Forest related")) %>%
+                          name %in% c("Forest", "Patch density", "Extent", "Type", "Extent x Type") ~ "Forest related")) %>%
   mutate(type = factor(type, levels = c("General", "Geomorphological", "Forest related")))
 
 p_estimates <- ggplot(estimates, aes(x = fct_rev(name), y = value)) +
@@ -223,50 +246,81 @@ p_estimates <- ggplot(estimates, aes(x = fct_rev(name), y = value)) +
   theme(legend.title = element_blank())
 
 estimates$model <- "binomial"
-write_csv(estimates, "../results/two_processes/binomial/estimates_binomial.csv")
+write_csv(estimates, "../results/binomial/estimates_binomial.csv")
 
-ggsave("estimates_binomial.png", p_estimates, path = "../results/two_processes/binomial/", width = 5.5, height = 2.5)
-ggsave("estimates_binomial.pdf", p_estimates, path = "../results/two_processes/binomial/", width = 5.5, height = 2.5, dpi = 300)
+ggsave("estimates_binomial.pdf", p_estimates, path = "../results/binomial/", width = 5.5, height = 2.5, dpi = 300)
 
-# Extract and plot random effects -----------------------------------------
+# Extract and plot eco region effects -----------------------------------------
 
-ecounit_effects <- final_models %>%
+# Estimates
+
+ecoregion_effects <- final_models %>%
   map(~ as.data.frame(.) %>%
-        dplyr::select(matches("Intercept"), eco_unit2:eco_unit9) %>% # Select everything that is an intercept
+        dplyr::select(matches("Intercept"), eco_region2:eco_region9) %>% # Select everything that is an intercept
         mutate(draw = 1:4000) %>%
         gather(key = varname, value = value, -draw) %>%
         mutate(varname = ifelse(varname == "(Intercept)", "intercept", varname))) %>%
   set_names(processes_names) %>%
   bind_rows(.id = "process") %>%
   spread(key = varname, value = value) %>%
-  gather(key = eco_unit, value = value, -process, -draw, -intercept) %>%
+  gather(key = eco_region, value = value, -process, -draw, -intercept) %>%
   mutate(value = value + intercept)
 
-p_ecounit_effects <- ggplot(ecounit_effects, aes(x = fct_rev(eco_unit), y = exp(value))) +
-  geom_violin(fill = "grey") +
+p_eff <- ggplot(ecoregion_effects, aes(x = "", y = exp(value))) +
+  geom_violin(aes(fill = fct_rev(eco_region))) +
   theme_bw() +
   theme(panel.grid = element_blank(),
         strip.background = element_blank()) +
   coord_flip() +
   theme(strip.background = element_blank()) +
-  geom_hline(data = ecounit_effects %>% group_by(process) %>% summarize(m = mean(exp(intercept))),
+  geom_hline(data = ecoregion_effects %>% group_by(process) %>% summarize(m = mean(exp(intercept))),
              aes(yintercept = m), linetype = "dashed", col = scales::muted("red")) +
-  labs(y = "Posterior probability distribution of parameter estimates", x = "Ecological unit", fill = "Process") +
-  scale_fill_brewer(palette = "Greys", direction = -1) +
+  labs(y = "Effect size", x = "", fill = "Ecological region") +
+  scale_fill_brewer(palette = "Set1", labels = c("2","3","4","5","6","7","8","9"), breaks = c("eco_region2", "eco_region3", "eco_region4", "eco_region5", "eco_region6", "eco_region7", "eco_region8", "eco_region9")) +
   facet_wrap(~process) +
-  scale_x_discrete(labels = c("9","8","7","6","5","4","3","2","1"))
+  theme(legend.position = "none") 
 
-ecounit_effects$model <- "binomial"
-write_csv(ecounit_effects, "../results/two_processes/binomial/ecounit_effects_binomial.csv")
 
-ggsave("ecounit_effects_binomial.pdf", p_ecounit_effects, path = "../results/two_processes/binomial", width = 5, height = 2.5)
-ggsave("ecounit_effects_binomial.png", p_ecounit_effects, path = "../results/two_processes/binomial", width = 5, height = 2.5)
+
+
+ecoregion_effects$model <- "binomial"
+write_csv(ecoregion_effects, "../results/binomial/ecoregion_effects_binomial.csv")
+
+ggsave("p_eff.pdf", p_eff, path = "../../../../../results/supplement/", width = 7, height = 2.5)
+ggsave("p_eff.png", p_eff, path = "../../../../../results/supplement/", width = 7, height = 2.5)
+
+ggsave("ecoregion_effects_binomial.pdf", p_eff, path = "../results/binomial", width = 7, height = 2.5)
+
+
+# Map 
+
+# load original shape file
+
+raw_eco <- read_sf("../../../../../materials/raw_data/shapefiles_ecological_units/WLamPoly.shp")
+
+p_map <- raw_eco %>%
+  mutate(main = Wuchsge1) %>%
+  mutate(main = substring(main, 1,1)) %>%
+  st_set_precision(100) %>%
+  group_by(main) %>%
+  summarize() %>%
+  ggplot(., aes( fill = factor(main))) +
+  geom_sf() +
+  theme_bw() +
+  scale_fill_brewer(palette = "Set1", direction = -1) +
+  guides(fill = guide_legend(title = "Ecological region")) 
+
+ggsave("../../../../../results/supplement/ecoregion_map_binomial.pdf", p_map, width = 7.5, height = 5)
+ggsave("../../../../../results/supplement/ecoregion_map_binomial.png", p_map, width = 7.5, height = 5)
+
+ggsave("../results/binomial/ecoregion_map_binomial.pdf", p_map, width = 7.5, height = 5)
+
 
 # Create response curve plots ---------------------------------------------
 
-# DCOMBINE
+# MFL
 
-response_disturbance <- expand.grid(eco_unit = factor(1),
+response_disturbance <- expand.grid(eco_region = factor(1),
                                     h_mean = 0,    
                                     Circularit = 0,
                                     Elongation = 0,
@@ -279,7 +333,7 @@ response_disturbance <- expand.grid(eco_unit = factor(1),
                                     extent = seq(quantile(scale(data$extent), 0), 
                                                  quantile(scale(data$extent), 0.99), 
                                                  length.out = 100),
-                                    press = c(quantile(data_model$press, 0.95), 0, quantile(data_model$press, 0.05)))  # viele EZGs haben Pulisty kleiner als -1
+                                    type = c(quantile(data_model$type, 0.05), 0, quantile(data_model$type, 0.95)))  # viele EZGs haben Pulisty kleiner als -1
 
 predictions <- final_models[[1]] %>%
   posterior_linpred(., newdata = response_disturbance, transform = TRUE)
@@ -287,11 +341,11 @@ predictions <- final_models[[1]] %>%
 response_disturbance[, "mean"] <- apply(predictions, 2, mean)
 response_disturbance[, "sd"] <- apply(predictions, 2, sd)  
 
-p_response_dcombine <- response_disturbance %>%
-  mutate(press = factor(press, labels =  c("Pulse", "Average", "Press"))) %>%
+p_response_mfl <- response_disturbance %>%
+  mutate(type = factor(type, labels =  c("Press", "Average", "Pulse"))) %>%
   ggplot(., aes(x = extent, y = mean)) +
-  geom_ribbon(aes(ymin = mean - sd, ymax = mean + sd, fill = press), alpha = 0.3) +
-  geom_line(aes(col = press)) +
+  geom_ribbon(aes(ymin = mean - sd, ymax = mean + sd, fill = type), alpha = 0.3) +
+  geom_line(aes(col = type)) +
   geom_point(data = sample_n(data %>% mutate(extent = as.double(scale(extent))) %>% filter(extent < quantile(extent, 0.99)), 1000), 
              aes(x = extent, y = -0.01), shape = 124, alpha = 0.3) +
   theme_bw() +
@@ -302,8 +356,8 @@ p_response_dcombine <- response_disturbance %>%
         legend.position = c(0, 1),
         legend.justification = c(0, 1),
         legend.title = element_text(size = 9)) +
-  scale_color_manual(values = c(scales::muted("blue"), "grey", scales::muted("red")), breaks = c("Press", "Average", "Pulse")) +
-  scale_fill_manual(values = c(scales::muted("blue"), "grey", scales::muted("red")), breaks = c("Press", "Average", "Pulse")) +
+  scale_color_brewer(palette = "Set1", breaks = c("Press", "Average", "Pulse")) +
+  scale_fill_brewer(palette = "Set1", breaks = c("Press", "Average", "Pulse")) +
   labs(x = "Disturbance extent", y = "Probability of event", 
        fill = "Disturbance type", col = "Disturbance type",
        title = "Mud-flow") +
@@ -312,6 +366,10 @@ p_response_dcombine <- response_disturbance %>%
                              keyheight = 0.1,
                              default.unit = "inch"))
 
-ggsave("response_curve_binomial.png", p_response_dcombine, path = "../results/two_processes/binomial/", width = 3.5, height = 3.5)
-ggsave("response_curve_binomial.pdf", p_response_dcombine, path = "../results/two_processes/binomial/", width = 3.5, height = 3.5)
+
+ggsave("response_curve_binomial.pdf", p_response_mfl, path = "../results/binomial/", width = 3.5, height = 3.5)
+
+ggsave("response_curve_binomial.png", p_response_mfl, path = "../../../../../results/figures", width = 3.5, height = 3.5)
+ggsave("response_curve_binomial.pdf", p_response_mfl, path = "../../../../../results/figures", width = 3.5, height = 3.5)
+
 
