@@ -1,19 +1,22 @@
 # Load packages and set options -------------------------------------------
 
 {
-  library(tidyverse)# version 1.2.1
-  library(patchwork)
+  library(tidyverse) # version 1.2.1
+  library(patchwork)  # version 0.0.1
 }
 
 # Load data ---------------------------------------------------------------
 
-estimates <- list.files("../results/two_processes", glob2rx("estimates*.csv"), recursive = TRUE, full.names = TRUE) %>%
+estimates <- list.files("../results/", glob2rx("estimates*.csv"), recursive = TRUE, full.names = TRUE) %>%
   map(read_csv) %>%
-  bind_rows()
+  bind_rows() %>%
+  mutate(name = factor(name, levels = c("Artificial", "Elevation","Area", 
+                                        "Elevation ratio", "Circularity", "Melton ratio", "Elongation",    
+                                        "Extent x Type", "Extent", "Type", "Patch density", "Forest")))
 
 p_estimate <- list(a = estimates %>% 
-       mutate(type = factor(type, levels = c("General", "Geomorphological", "Forest related"))) %>% 
-       mutate(model = factor(model, labels = c("Probability", "Count"))) %>% 
+       mutate(type = factor(type, levels = c("General", "Geomorphology", "Forest"))) %>% 
+       mutate(model = factor(model, labels = c("Occurrence", "Frequency"))) %>% 
        split(.$type),
      b = list(NULL, NULL, "Effect size"),
      c = list(element_blank(), element_blank(), element_text()),
@@ -48,3 +51,5 @@ p_estimate <- list(a = estimates %>%
   wrap_plots(ncol = 1, heights = c(1, 1.3, 1.6))
 
 ggsave("../results/estimates_combined.pdf", p_estimate, width = 5.5, height = 4.5)
+ggsave("../../../../../results/figures/estimates_combined.pdf", p_estimate, width = 5.5, height = 4.5)
+ggsave("../../../../../results/figures/estimates_combined.png", p_estimate, width = 5.5, height = 4.5)
