@@ -26,7 +26,7 @@
 data <- read.csv("../data/data_for_model.csv") 
 
 processes <- c("MFL", "FST")
-processes_names <- c("Mud-flow", "Sediment-transport")
+processes_names <- c("Debris-flow", "Sediment-transport")
 
 # Selecting a model -----------------------------------------------
 
@@ -227,9 +227,21 @@ estimates <- final_models %>%
                                         "Melton ratio", "Elongation", "Forest", "Patch density", "Extent", 
                                         "Type", "Extent x Type"))) %>%
   mutate(type = case_when(name %in% c("Area", "Elevation", "Artificial") ~ "General",
-                          name %in% c ("Elevation ratio", "Circularity", "Melton ratio", "Elongation") ~ "Geomorphological",
-                          name %in% c("Forest", "Patch density", "Extent", "Type", "Extent x Type") ~ "Forest related")) %>%
-  mutate(type = factor(type, levels = c("General", "Geomorphological", "Forest related")))
+                          name %in% c ("Elevation ratio", "Circularity", "Melton ratio", "Elongation") ~ "Geomorphology",
+                          name %in% c("Forest", "Patch density", "Extent", "Type", "Extent x Type") ~ "Forest")) %>%
+  mutate(type = factor(type, levels = c("General", "Geomorphology", "Forest")))
+
+# Effect of forest cover on probability in % ("devide by four rule")
+
+debris <- filter(estimates, process == "Debris-flow" & name == "Forest")
+
+sediment <- filter(estimates, process == "Sediment-transport" & name == "Forest")
+
+(median(debris$value)/4)*100
+
+(median(sediment$value)/4)*100
+
+# Plot effect sizes and directions
 
 p_estimates <- ggplot(estimates, aes(x = fct_rev(name), y = value)) +
   geom_violin(aes(fill = paste0("  ", type))) +
@@ -242,7 +254,7 @@ p_estimates <- ggplot(estimates, aes(x = fct_rev(name), y = value)) +
   labs(y = "Effect size", x = NULL) +
   #scale_fill_brewer(palette = "Greys", direction = -1) +
   facet_wrap(~process) +
-  scale_fill_manual(values = c("#276419","#ffffbf", "#4393c3"), breaks = c("  General", "  Geomorphological", "  Forest related" )) +
+  scale_fill_manual(values = c("#276419","#ffffbf", "#4393c3"), breaks = c("  General", "  Geomorphology", "  Forest" )) +
   theme(legend.title = element_blank())
 
 estimates$model <- "binomial"
@@ -286,8 +298,8 @@ p_eff <- ggplot(ecoregion_effects, aes(x = "", y = exp(value))) +
 ecoregion_effects$model <- "binomial"
 write_csv(ecoregion_effects, "../results/binomial/ecoregion_effects_binomial.csv")
 
-ggsave("p_eff.pdf", p_eff, path = "../../../../../results/supplement/", width = 7, height = 2.5)
-ggsave("p_eff.png", p_eff, path = "../../../../../results/supplement/", width = 7, height = 2.5)
+ggsave("p_eff.pdf", p_eff, path = "../../../../../results/supplement/", width = 5.5, height = 2.5)
+ggsave("p_eff.png", p_eff, path = "../../../../../results/supplement/", width = 5.5, height = 2.5)
 
 ggsave("ecoregion_effects_binomial.pdf", p_eff, path = "../results/binomial", width = 7, height = 2.5)
 
@@ -318,7 +330,7 @@ ggsave("../results/binomial/ecoregion_map_binomial.pdf", p_map, width = 7.5, hei
 
 # Create response curve plots ---------------------------------------------
 
-# MFL
+# DFL
 
 response_disturbance <- expand.grid(eco_region = factor(1),
                                     h_mean = 0,    
@@ -341,7 +353,7 @@ predictions <- final_models[[1]] %>%
 response_disturbance[, "mean"] <- apply(predictions, 2, mean)
 response_disturbance[, "sd"] <- apply(predictions, 2, sd)  
 
-p_response_mfl <- response_disturbance %>%
+p_response_dfl <- response_disturbance %>%
   mutate(type = factor(type, labels =  c("Press", "Average", "Pulse"))) %>%
   ggplot(., aes(x = extent, y = mean)) +
   geom_ribbon(aes(ymin = mean - sd, ymax = mean + sd, fill = type), alpha = 0.3) +
@@ -358,18 +370,19 @@ p_response_mfl <- response_disturbance %>%
         legend.title = element_text(size = 9)) +
   scale_color_brewer(palette = "Set1", breaks = c("Press", "Average", "Pulse")) +
   scale_fill_brewer(palette = "Set1", breaks = c("Press", "Average", "Pulse")) +
-  labs(x = "Disturbance extent", y = "Probability of event", 
+  labs(x = "Disturbance extent", y = "Probability of occurrence", 
        fill = "Disturbance type", col = "Disturbance type",
-       title = "Mud-flow") +
+       title = "Debris-flow") +
   guides(fill = guide_legend(ncol = 1, 
                              keywidth = 0.1,
                              keyheight = 0.1,
                              default.unit = "inch"))
 
 
-ggsave("response_curve_binomial.pdf", p_response_mfl, path = "../results/binomial/", width = 3.5, height = 3.5)
 
-ggsave("response_curve_binomial.png", p_response_mfl, path = "../../../../../results/figures", width = 3.5, height = 3.5)
-ggsave("response_curve_binomial.pdf", p_response_mfl, path = "../../../../../results/figures", width = 3.5, height = 3.5)
+ggsave("response_curve_binomial.pdf", p_response_dfl, path = "../results/binomial/", width = 3.5, height = 3.5)
+
+ggsave("response_curve_binomial.png", p_response_dfl, path = "../../../../../results/figures", width = 3.5, height = 3.5)
+ggsave("response_curve_binomial.pdf", p_response_dfl, path = "../../../../../results/figures", width = 3.5, height = 3.5)
 
 

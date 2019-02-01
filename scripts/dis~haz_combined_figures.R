@@ -15,8 +15,8 @@ estimates <- list.files("../results/", glob2rx("estimates*.csv"), recursive = TR
                                         "Extent x Type", "Extent", "Type", "Patch density", "Forest")))
 
 p_estimate <- list(a = estimates %>% 
-       mutate(type = factor(type, levels = c("General", "Geomorphological", "Forest related"))) %>% 
-       mutate(model = factor(model, labels = c("Probability", "Count"))) %>% 
+       mutate(type = factor(type, levels = c("General", "Geomorphology", "Forest"))) %>% 
+       mutate(model = factor(model, labels = c("Occurrence", "Frequency"))) %>% 
        split(.$type),
      b = list(NULL, NULL, "Effect size"),
      c = list(element_blank(), element_blank(), element_text()),

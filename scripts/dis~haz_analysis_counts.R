@@ -18,7 +18,8 @@
   
   options(mc.cores = parallel::detectCores())
   rstan_options(auto_write = TRUE)
-  
+ 
+  rm(list=ls()) 
 }
 
 # Load data ---------------------------------------------------------------
@@ -26,7 +27,7 @@
 data <- read.csv("../data/data_for_model.csv") 
 
 processes <- c("MFL", "FST")
-processes_names <- c("Mud-flow", "Sediment-transport")
+processes_names <- c("Debris-flow", "Sediment-transport")
 
 
 # Selecting a model -----------------------------------------------
@@ -203,9 +204,9 @@ estimates <- final_models %>%
                                          "Melton ratio", "Elongation", "Forest", "Patch density", "Extent", 
                                          "Type", "Extent x Type"))) %>%
   mutate(type = case_when(name %in% c("Area", "Elevation", "Artificial") ~ "General",
-                          name %in% c ("Elevation ratio", "Circularity", "Melton ratio", "Elongation") ~ "Geomorphological",
-                          name %in% c("Forest", "Patch density", "Extent", "Type", "Extent x Type") ~ "Forest related")) %>%
-  mutate(type = factor(type, levels = c("General", "Geomorphological", "Forest related")))
+                          name %in% c ("Elevation ratio", "Circularity", "Melton ratio", "Elongation") ~ "Geomorphology",
+                          name %in% c("Forest", "Patch density", "Extent", "Type", "Extent x Type") ~ "Forest")) %>%
+  mutate(type = factor(type, levels = c("General", "Geomorphology", "Forest")))
 
 p_estimates <- ggplot(estimates, aes(x = fct_rev(name), y = value)) +
   geom_violin(aes(fill = paste0("  ", type))) +
@@ -217,7 +218,7 @@ p_estimates <- ggplot(estimates, aes(x = fct_rev(name), y = value)) +
   geom_hline(yintercept = 0, linetype = "dashed", col = scales::muted("red")) +
   labs(y = "Posterior probability distribution of parameter estimates", x = NULL) +
   facet_wrap(~process) +
-  scale_fill_manual(values = c("#276419","#ffffbf", "#4393c3"), breaks = c("  General", "  Geomorphological", "  Forest related" )) +
+  scale_fill_manual(values = c("#276419","#ffffbf", "#4393c3"), breaks = c("  General", "  Geomorphology", "  Forest" )) +
   theme(legend.title = element_blank())
 
 estimates$model <- "count"
@@ -254,16 +255,16 @@ p_ecoregion_effects <- ggplot(ecoregion_effects, aes(x = fct_rev(eco_region), y 
   scale_x_discrete(labels = c("9","8","7","6","5","4","3","2","1"))
 
 ecoregion_effects$model <- "count"
-write_csv(ecounit_effects, "../results/two_processes/count/ecoregion_effects_count.csv")
+write_csv(ecoregion_effects, "../results/count/ecoregion_effects_count.csv")
 
-ggsave("ecoregion_effects_count.pdf", p_ecounit_effects, path = "../results/count/", width = 5, height = 2.5)
+ggsave("ecoregion_effects_count.pdf", p_ecoregion_effects, path = "../results/count/", width = 5, height = 2.5)
 
 ggsave("ecoregion_effects_count.pdf", p_ecoregion_effects, path = "../../../../../results/supplement/", width = 5, height = 2.5)
 ggsave("ecoregion_effects_count.png", p_ecoregion_effects, path = "../../../../../results/supplement/", width = 5, height = 2.5)
 
 # Expected counts plot ---------------------------------------------
 
-# MFL
+# DFL
 
 response_disturbance <- expand.grid(eco_region = factor(1),
                                     h_mean = 0,    
@@ -284,7 +285,7 @@ predictions <- final_models[[1]] %>%
 response_disturbance[, "mean"] <- apply(predictions, 2, mean)
 response_disturbance[, "sd"] <- apply(predictions, 2, sd)  
 
-p_response_mfl <- response_disturbance %>%
+p_response_dfl <- response_disturbance %>%
   mutate(type = factor(type, labels =  c("Press", "Average", "Pulse"))) %>%
   mutate(extent = factor(extent, labels =  c("Low extent", "Average extent", "Large extent"))) %>%
   split(list(.$type, .$extent)) %>%
@@ -307,7 +308,7 @@ p_response_mfl <- response_disturbance %>%
         strip.background = element_blank(),
         plot.title = element_text(size = 11)) +
   labs(x = "Number of events", y = "Probability", 
-       fill = "Disturbance type", title = "a) Mud-flow") +
+       fill = "Disturbance type", title = "a) Debris-flow") +
   scale_fill_brewer(palette = "Set1") +
   facet_wrap(~extent) +
   ylim(0, 0.15)
@@ -362,7 +363,7 @@ p_response_fst <- response_disturbance %>%
 
 # Combine plots
 
-p_response <- p_response_mfl + p_response_fst + plot_layout(ncol = 2, widths = c(3, 1.1))
+p_response <- p_response_dfl + p_response_fst + plot_layout(ncol = 2, widths = c(3, 1.1))
 
 ggsave("expected_counts.pdf", p_response, path = "../results/count/", width = 7.5, height = 5)
 
