@@ -15,14 +15,17 @@ estimates <- list.files("../results/", glob2rx("estimates*.csv"), recursive = TR
                                         "Extent x Type", "Extent", "Type", "Patch density", "Forest")))
 
 p_estimate <- list(a = estimates %>% 
-       mutate(type = factor(type, levels = c("General", "Geomorphology", "Forest"))) %>% 
-       mutate(model = factor(model, labels = c("Occurrence", "Frequency"))) %>% 
+                     mutate(type = case_when(name %in% c("Forest", "Patch density") ~ "Forest",
+                                             name %in% c("Extent x Type", "Extent", "Type") ~ "Disturbance",
+                                             TRUE ~ type)) %>%      
+                     mutate(type = factor(type, levels = c("General", "Geomorphology", "Forest", "Disturbance"))) %>% 
+                     mutate(model = factor(model, labels = c("Occurrence", "Frequency"))) %>% 
        split(.$type),
-     b = list(NULL, NULL, "Effect size"),
-     c = list(element_blank(), element_blank(), element_text()),
-     d = list(element_text(size = 10), element_blank(), element_blank()),
-     e = list(element_blank(), element_blank(), element_line()),
-     f = list("none", "right", "none")) %>%
+     b = list(NULL, NULL, NULL, "Effect size"),
+     c = list(element_blank(), element_blank(), element_blank(), element_text()),
+     d = list(element_text(size = 10), element_blank(), element_blank(), element_blank()),
+     e = list(element_blank(), element_blank(), element_blank(), element_line()),
+     f = list("right", "none", "none", "none")) %>%
   pmap(.l = ., .f = function (a, b, c, d, e, f) {
     ggplot(a, aes(x = name, y = value)) +
       geom_violin(aes(fill = model)) +
@@ -48,8 +51,6 @@ p_estimate <- list(a = estimates %>%
                                  keyheight = 0.1,
                                  default.unit = "inch"))
   }) %>%
-  wrap_plots(ncol = 1, heights = c(1, 1.3, 1.6))
+  wrap_plots(ncol = 1, heights = c(1, 1.2, 0.6, 1))
 
 ggsave("../results/estimates_combined.pdf", p_estimate, width = 5.5, height = 4.5)
-ggsave("../../../../../results/figures/estimates_combined.pdf", p_estimate, width = 5.5, height = 4.5)
-ggsave("../../../../../results/figures/estimates_combined.png", p_estimate, width = 5.5, height = 4.5)

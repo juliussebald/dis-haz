@@ -84,41 +84,94 @@ for (process in processes) {
   
   data_model$eco_region <- as.factor(data_model$eco_region)
   
-  # Fit watershed-only model
+  # Fit null model
   
-  fit_ws_only <- stan_glm(as.formula(paste0("response ~ ", paste0(paste(vars_ws$varname[-which(vars_ws$varname %in% c("extent", "type", "extent:type"))], collapse = "+")))),
-                          data = data_model,
-                          family = binomial,
-                          prior = normal(0, 0.5, autoscale = TRUE),
-                          prior_intercept = normal(0, 0.5, autoscale = TRUE),
-                          prior_aux = exponential(rate = 1, autoscale = TRUE),
-                          QR = TRUE)
+  fit_null <- stan_glm(response ~ 1,
+                       data = data_model,
+                       family = binomial,
+                       prior = normal(0, 0.5, autoscale = TRUE),
+                       prior_intercept = normal(0, 0.5, autoscale = TRUE),
+                       prior_aux = exponential(rate = 1, autoscale = TRUE))
   
-  # Calculate loo for watershed-pnly model
+  # Calculate loo for null model
   
-  loo_fit_ws_only <- loo(fit_ws_only)
+  loo_fit_null <- loo(fit_null)
   
-  # Include disturbance predictors
+  # Fit general model
   
-  fit_full_exp <- update(fit_ws_only, . ~ . + extent * type)
+  fit_general <- update(fit_null, . ~ . + area + h_mean + artifical + eco_region, QR = TRUE)
+  
+  # Calculate loo for general model
+  
+  loo_fit_general <- loo(fit_general)
+  
+  # Fit general+geomorph model
+  
+  fit_general_geomorph <- update(fit_general, . ~ . + Elevation + Melton + Circularit + Elongation, QR = TRUE)
+  
+  # Calculate loo for general+geomorph model
+  
+  loo_fit_general_geomorph <- loo(fit_general_geomorph)
+  
+  # Fit general+geomorph+forest model
+  
+  fit_general_geomorph_forest <- update(fit_general_geomorph, . ~ . + forest + patchdensity, QR = TRUE)
+  
+  # Calculate loo for general+geomorph+forest model
+  
+  loo_fit_general_geomorph_forest <- loo(fit_general_geomorph_forest)
+  
+  # Fit general+geomorph+forest-disturbance model
+  
+  fit_general_geomorph_forest_disturbances <- update(fit_general_geomorph_forest, . ~ . + extent * type)
   
   # Calculate loo for full model
   
-  loo_fit_full_exp <- loo(fit_full_exp)
+  loo_fit_general_geomorph_forest_disturbances <- loo(fit_general_geomorph_forest_disturbances)
   
   # compare watershed model and full model
   
-  model_comparison_ws_full <- loo::compare(loo_fit_ws_only,
-                                           loo_fit_full_exp)
+  model_comparison <- loo::compare(loo_fit_null,
+                                   loo_fit_general,
+                                   loo_fit_general_geomorph,
+                                   loo_fit_general_geomorph_forest,
+                                   loo_fit_general_geomorph_forest_disturbances)
   
+  model_comparison_direct <- list(loo::compare(loo_fit_null,
+                                               loo_fit_general),
+                                  loo::compare(loo_fit_general,
+                                               loo_fit_general_geomorph),
+                                  loo::compare(loo_fit_general_geomorph,
+                                               loo_fit_general_geomorph_forest),
+                                  loo::compare(loo_fit_general_geomorph_forest,
+                                               loo_fit_general_geomorph_forest_disturbances))
+  
+  model_comparison_direct <- model_comparison_direct %>%
+    map(~ as.vector(.)) %>%
+    set_names(c("General",
+                "Geomorph",
+                "Forest",
+                "Disturbances")) %>%
+    bind_rows() %>%
+    t() %>%
+    as.data.frame() %>%
+    rename_("ELPD difference" = "V1", "SE" = "V2")
+    
+    
   # Store everything in a list
   
-  models[[k]] <- list(fit_ws_only, #1
-                      fit_full_exp, #2
-                      list(loo_fit_ws_only,
-                           loo_fit_full_exp), #3
-                      model_comparison_ws_full #4
-  )
+  models[[k]] <- list(list(fit_null,
+                           fit_general,
+                           fit_general_geomorph,
+                           fit_general_geomorph_forest,
+                           fit_general_geomorph_forest_disturbances),
+                      list(loo_fit_null,
+                           loo_fit_general,
+                           loo_fit_general_geomorph,
+                           loo_fit_general_geomorph_forest,
+                           loo_fit_general_geomorph_forest_disturbances),
+                      model_comparison,
+                      model_comparison_direct)
                        
 }
 
@@ -130,62 +183,39 @@ load(file =  "../results/binomial/models_binomial.RData")
 
 ### Model comparison
 
-elpds_ws_only_model <- models %>% 
-  map(., ~ as.data.frame(.[[3]][[1]][[1]]) %>%
-        rownames_to_column(., var = "model")) %>%
+elpd <- models %>%
+  map(., ~ .[[3]]) %>%
+  map(., ~ data.frame(ELPD = .[,2])) %>%
+  map(., ~ rownames_to_column(., var = "predictor")) %>%
   set_names(processes_names) %>%
   bind_rows(.id = "process") %>%
-  filter(model == "elpd_loo") %>%
-  dplyr::select(process, elpd_ws_only_model = Estimate)
+  mutate(predictor = gsub("loo_fit_", "", predictor)) %>%
+  mutate(ELPD = round(ELPD, 2))
 
-elpds_full_model <- models %>% 
-  map(., ~ as.data.frame(.[[3]][[2]][[1]]) %>%
-        rownames_to_column(., var = "model")) %>%
+elpd_differeences <- models %>% 
+  map(., ~ .[[4]]) %>%
+  map(., ~ rownames_to_column(., var = "predictor")) %>%
   set_names(processes_names) %>%
   bind_rows(.id = "process") %>%
-  filter(model == "elpd_loo") %>%
-  dplyr::select(process, elpd_full_model = Estimate)
+  dplyr::rename("ELPD" = "ELPD difference") %>%
+  mutate(Difference = paste(round(ELPD, 2), round(SE, 2), sep = "±")) %>%
+  dplyr::select(-SE, -ELPD) %>%
+  mutate(predictor = case_when(predictor == "General" ~ "general",
+                               predictor == "Geomorph" ~ "general_geomorph",
+                               predictor == "Forest" ~ "general_geomorph_forest",
+                               predictor == "Disturbances" ~ "general_geomorph_forest_disturbances"))
 
-elpds_difference <- models %>% 
-  map(., ~ data.frame(elpd_dif_ws_full = .[[4]][[1]], 
-                      elpd_dif_se_ws_full = .[[4]][[2]])) %>%
-  set_names(processes_names) %>%
-  bind_rows(.id = "process")
+model_comparsion <- left_join(elpd, elpd_differeences, by = c("process", "predictor")) %>%
+  mutate(value = paste0(ELPD, " (", Difference, ")")) %>%
+  dplyr::select( -ELPD, -Difference) %>%
+  spread(key = predictor, value = value) %>%
+  dplyr::select(process, null, general, general_geomorph, general_geomorph_forest, general_geomorph_forest_disturbances)
 
-# get_auc <- function(model) { # Function for calculating AUC of model via loo
-#   loo <- loo(model, save_psis = TRUE)
-#   preds <- posterior_linpred(model, transform = TRUE, re.form = NA)
-#   ploo <- loo::E_loo(preds, psis_object = loo$psis_object, type = "mean", log_ratios = -log_lik(model))$value
-#   auc <- AUC::auc(AUC::roc(ploo, factor(model$y)))
-#   return(auc)
-# }
-
-# auc_ws_only <- models %>%
-#   map(., ~ .[[1]]) %>%
-#   map(~ get_auc(.)) %>%
-#   map(., ~ data.frame(auc_ws_only = .)) %>%
-#   set_names(processes_names) %>%
-#   bind_rows(.id = "process")
- 
-# auc_full <- models %>%
-#   map(., ~ .[[2]]) %>%
-#   map(~ get_auc(.)) %>%
-#   map(., ~ data.frame(auc_full = .)) %>%
-#   set_names(processes_names) %>%
-#   bind_rows(.id = "process")
-
-model_performances <- elpds_ws_only_model %>%
-  left_join(elpds_full_model, by = "process") %>%
-  left_join(elpds_difference, by = "process")
-
-write_csv(model_performances, "../results/binomial/model_performances_binomial.csv")
-
-write_csv(model_performances, "../../../../../results/tables/model_performances_binomial.csv")
-
+write_csv(model_comparsion, "../results/binomial/model_comparsion_binomial.csv")
 
 ### Extract final model
 
-final_models <- models %>% map2(.y = c(2, 2), ~ .[[.y]])
+final_models <- models %>% map(., ~ .[[1]][[5]])
 
 ### Posterior predictive checks
 
@@ -208,10 +238,6 @@ ppc_mean <- pred_posterior_full %>%
   patchwork::wrap_plots(.)
 
 ggsave("ppc_binomial.pdf", ppc_mean, path = "../results/binomial/", width = 5.5, height = 2.5)
-
-ggsave("ppc_binomial.pdf", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 2.5)
-ggsave("ppc_binomial.png", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 2.5)
-
 
 # Extract and plot estimates ----------------------------------------------
 
@@ -292,17 +318,10 @@ p_eff <- ggplot(ecoregion_effects, aes(x = "", y = exp(value))) +
   facet_wrap(~process) +
   theme(legend.position = "none") 
 
-
-
-
 ecoregion_effects$model <- "binomial"
 write_csv(ecoregion_effects, "../results/binomial/ecoregion_effects_binomial.csv")
 
-ggsave("p_eff.pdf", p_eff, path = "../../../../../results/supplement/", width = 5.5, height = 2.5)
-ggsave("p_eff.png", p_eff, path = "../../../../../results/supplement/", width = 5.5, height = 2.5)
-
 ggsave("ecoregion_effects_binomial.pdf", p_eff, path = "../results/binomial", width = 7, height = 2.5)
-
 
 # Map 
 
@@ -378,11 +397,6 @@ p_response_dfl <- response_disturbance %>%
                              keyheight = 0.1,
                              default.unit = "inch"))
 
-
-
 ggsave("response_curve_binomial.pdf", p_response_dfl, path = "../results/binomial/", width = 3.5, height = 3.5)
-
-ggsave("response_curve_binomial.png", p_response_dfl, path = "../../../../../results/figures", width = 3.5, height = 3.5)
-ggsave("response_curve_binomial.pdf", p_response_dfl, path = "../../../../../results/figures", width = 3.5, height = 3.5)
 
 
