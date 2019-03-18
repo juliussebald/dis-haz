@@ -281,7 +281,6 @@ write_csv(estimates, "../results/count/estimates_count.csv")
 ggsave("estimates_count.pdf", p_estimates, path = "../results/count/", width = 5.5, height = 2.5)
 ggsave("estimates_count.png", p_estimates, path = "../../../../../results/supplement/", width = 5.5, height = 2.5)
 
-
 # Extract and plot eco_region effects -----------------------------------------
 
 ecoregion_effects <- final_models %>%
@@ -318,6 +317,16 @@ ggsave("ecoregion_effects_count.pdf", p_ecoregion_effects, path = "../results/co
 
 # Expected counts plot ---------------------------------------------
 
+# Re-create data_model data frame (same as for modeling above)
+
+vars_nointeraction <- vars_ws %>% 
+  filter(!varname %in% c("extent:type", "eco_region"))
+data_model <- data
+data_model[data_model$extent == 0, "type"] <- NA
+data_model <- data_model %>%
+  mutate_at(.vars = vars(c(vars_nointeraction$varname)), function(x) (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE))
+data_model[data_model$extent == min(data_model$extent), "type"] <- 0
+
 # DFL
 
 response_disturbance <- expand.grid(eco_region = factor(1),
@@ -330,8 +339,9 @@ response_disturbance <- expand.grid(eco_region = factor(1),
                                     forest = 0,
                                     Elevation = 0,
                                     Melton = 0,
-                                    extent = c(quantile(data_model$extent, 0.95), 0, quantile(data_model$extent, 0.05)),
-                                    type = c(quantile(data_model$type, 0.05), 0, quantile(data_model$type, 0.95)))  # viele EZGs haben Pulisty kleiner als -1
+                                    extent = c((0.5 - mean(data$extent)) / sd(data$extent), 
+                                               (0.1 - mean(data$extent)) / sd(data$extent)),
+                                    type = c(quantile(data_model$type, 0.05), quantile(data_model$type, 0.95)))  # viele EZGs haben Pulisty kleiner als -1
 
 predictions <- final_models[[1]] %>%
   posterior_linpred(., newdata = response_disturbance, transform = TRUE)
@@ -340,55 +350,53 @@ response_disturbance[, "mean"] <- apply(predictions, 2, mean)
 response_disturbance[, "sd"] <- apply(predictions, 2, sd)  
 
 p_response_dfl <- response_disturbance %>%
-  mutate(type = factor(type, labels =  c("Press", "Average", "Pulse"))) %>%
-  mutate(extent = factor(extent, labels =  c("Small extent", "Average extent", "Large extent"))) %>%
+  mutate(type = factor(type, labels =  c("Press", "Pulse"))) %>%
+  mutate(extent = factor(extent, labels =  c("Small extent (10%)", "Large extent (50%)"))) %>%
   split(list(.$type, .$extent)) %>%
-  map(~ data.frame(count = 1:3, 
-                   prop = dpois(x = 1:3, lambda = .$mean),
-                   prop_lwr = dpois(x = 1:3, lambda = .$mean - .$sd),
-                   prop_upr = dpois(x = 1:3, lambda = .$mean + .$sd))) %>%
+  map(~ data.frame(count = 1:2, 
+                   prop = dpois(x = 1:2, lambda = .$mean / length(1986:2018)),
+                   prop_lwr = dpois(x = 1:2, lambda = (.$mean - .$sd) / length(1986:2018)),
+                   prop_upr = dpois(x = 1:2, lambda = (.$mean + .$sd) / length(1986:2018)))) %>%
   bind_rows(.id = "id") %>%
   separate("id", c("type", "extent"), "\\.") %>%
-  mutate(type = factor(type, levels =  c("Press", "Average", "Pulse"))) %>%
-  mutate(extent = factor(extent, levels =  c("Small extent", "Average extent", "Large extent"))) %>%
-  ggplot(., aes(x = as.factor(count), y = prop, fill = type)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin = prop_lwr, ymax = prop_upr), position = position_dodge(width = 0.9), width = 0.25) +
+  mutate(count = factor(count, labels =  c("One event", "Two events"))) %>%
+  mutate(type = factor(type, levels =  c("Press", "Pulse"))) %>%
+  mutate(extent = factor(extent, levels =  c("Large extent (50%)", "Small extent (10%)"))) %>%
+  ggplot(., aes(x = type, y = prop, fill = extent)) +
+  geom_bar(stat = "identity", position = "dodge",  width = 0.5) +
+  geom_errorbar(aes(ymin = prop_lwr, ymax = prop_upr), position = position_dodge(width = 0.45), width = 0.125) +
   theme_bw() +
   theme(legend.background = element_blank(),
-        legend.position = "none",
+        legend.position = "right",
         legend.justification = c(1, 1),
+        #legend.text = element_text(size = 9),
         panel.grid = element_blank(),
         strip.background = element_blank(),
         plot.title = element_text(size = 11)) +
-  labs(x = "Number of events", y = "Probability", 
-       fill = "Disturbance type", title = "a) Debris flow") +
+  labs(x = "Disturbance type", y = bquote("Probability of occurrence (%"*yr^-1*")"), 
+       fill = NULL, title = "a) Debris flow") +
   scale_fill_brewer(palette = "Set1") +
-  facet_wrap(~extent) +
-  ylim(0, 0.15)
-
+  facet_wrap(~count, scales = "free") + 
+  scale_y_continuous(labels = function(x) round(x * 100, 3))
 
 # Some numbers
 
 response_dfl <- response_disturbance %>%
   mutate(type = factor(type, labels =  c("Press", "Average", "Pulse"))) %>%
-  mutate(extent = factor(extent, labels =  c("Small extent", "Average extent", "Large extent"))) %>%
+  mutate(extent = factor(extent, labels =  c("Small extent (10%)", "Large extent (50%)"))) %>%
   split(list(.$type, .$extent)) %>%
-  map(~ data.frame(count = 1:3, 
-                   prop = dpois(x = 1:3, lambda = .$mean),
-                   prop_lwr = dpois(x = 1:3, lambda = .$mean - .$sd),
-                   prop_upr = dpois(x = 1:3, lambda = .$mean + .$sd))) %>%
+  map(~ data.frame(count = 1:2, 
+                   prop = dpois(x = 1:2, lambda = .$mean / length(1986:2018)),
+                   prop_lwr = dpois(x = 1:2, lambda = (.$mean - .$sd) / length(1986:2018)),
+                   prop_upr = dpois(x = 1:2, lambda = (.$mean + .$sd) / length(1986:2018)))) %>%
   bind_rows(.id = "id") %>%
-  separate("id", c("type", "extent"), "\\.") %>%
-  mutate(type = factor(type, levels =  c("Press", "Average", "Pulse"))) %>%
-  mutate(extent = factor(extent, levels =  c("Small extent", "Average extent", "Large extent")))
+  separate("id", c("type", "extent"), "\\.")
 
-large_press_2 <- filter(response_dfl, type == "Press" & extent == "Large extent" & count == 2)
-small_pulse_2 <- filter(response_dfl, type == "Pulse" & extent == "Low extent" & count == 2)
+large_press_2 <- filter(response_dfl, type == "Press" & extent == "Large extent (50%)" & count == 2)
+large_pulse_2 <- filter(response_dfl, type == "Pulse" & extent == "Large extent (50%)" & count == 2)
 
-
-worst <- large_press_2$prop
-best <- small_pulse_2$prop
+worst <- large_press_2$prop * 100
+best <- small_pulse_2$prop * 100
 
 worst/best
 
@@ -406,7 +414,7 @@ response_disturbance <- expand.grid(eco_region = factor(1),
                                     Elevation = 0,
                                     Melton = 0,
                                     extent = 0,
-                                    type = c(quantile(data_model$type, 0.05), 0, quantile(data_model$type, 0.95)))  # viele EZGs haben Pulisty kleiner als -1
+                                    type = c(quantile(data_model$type, 0.05), quantile(data_model$type, 0.95)))  # viele EZGs haben Pulisty kleiner als -1
 
 predictions <- final_models[[2]] %>%
   posterior_linpred(., newdata = response_disturbance, transform = TRUE)
@@ -415,31 +423,32 @@ response_disturbance[, "mean"] <- apply(predictions, 2, mean)
 response_disturbance[, "sd"] <- apply(predictions, 2, sd)  
 
 p_response_fst <- response_disturbance %>%
-  mutate(type = factor(type, labels =  c("Press", "Average", "Pulse"))) %>%
+  mutate(type = factor(type, labels =  c("Press", "Pulse"))) %>%
   split(.$type) %>%
-  map(~ data.frame(count = 1:3, 
-                   prop = dpois(x = 1:3, lambda = .$mean),
-                   prop_lwr = dpois(x = 1:3, lambda = .$mean - .$sd),
-                   prop_upr = dpois(x = 1:3, lambda = .$mean + .$sd))) %>%
+  map(~ data.frame(count = 1:2, 
+                   prop = dpois(x = 1:2, lambda = .$mean / length(1986:2018)),
+                   prop_lwr = dpois(x = 1:2, lambda = (.$mean - .$sd) / length(1986:2018)),
+                   prop_upr = dpois(x = 1:2, lambda = (.$mean + .$sd) / length(1986:2018)))) %>%
   bind_rows(.id = "type") %>%
-  mutate(type = factor(type, levels =  c("Press", "Average", "Pulse"))) %>%
-  ggplot(., aes(x = as.factor(count), y = prop, fill = type)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin = prop_lwr, ymax = prop_upr), position = position_dodge(width = 0.9), width = 0.25) +
+  mutate(count = factor(count, labels =  c("One event", "Two events"))) %>%
+  mutate(type = factor(type, levels =  c("Press", "Pulse"))) %>%
+  ggplot(., aes(x = type, y = prop)) +
+  geom_bar(stat = "identity", position = "dodge",  width = 0.5) +
+  geom_errorbar(aes(ymin = prop_lwr, ymax = prop_upr), width = 0.125) +
   theme_bw() +
-  theme(legend.background = element_blank(),
-        legend.position = "right",
-        legend.justification = c(1, 1),
-        panel.grid = element_blank(),
+  theme(panel.grid = element_blank(),
         strip.background = element_blank(),
         plot.title = element_text(size = 11)) +
-  labs(x = "Number of events", y = "Probability", 
-       fill = "Disturbance type", title = "b) Flood") +
+  labs(x = "Disturbance type", y = bquote("Probability of occurrence (%"*yr^-1*")"), 
+       title = "b) Flood") +
   scale_fill_brewer(palette = "Set1") +
+  facet_wrap(~count, scales = "free") +
   guides(fill = guide_legend(ncol = 1, 
                              keywidth = 0.15,
                              keyheight = 0.1,
-                             default.unit = "inch"))
+                             default.unit = "inch")) + 
+  scale_y_continuous(labels = function(x) round(x * 100, 3))
+
 # Also some numbers
 
 response_fst <- response_disturbance %>%
@@ -453,6 +462,7 @@ response_fst <- response_disturbance %>%
   mutate(type = factor(type, levels =  c("Press", "Average", "Pulse"))) 
 
 # one event
+
 press_1 <- filter(response_fst, type == "Press" & count == 1)
 pulse_1 <- filter(response_fst, type == "Pulse" & count == 1)
 
@@ -475,7 +485,7 @@ worst_2/best_2
 
 # Combine plots
 
-p_response <- p_response_dfl + p_response_fst + plot_layout(ncol = 2, widths = c(3, 1.1))
+p_response <- p_response_dfl + p_response_fst + plot_layout(ncol = 1)
 
-ggsave("expected_counts.pdf", p_response, path = "../results/count/", width = 7.5, height = 5)
+ggsave("expected_counts.pdf", p_response, path = "../results/count/", width = 7, height = 5.5)
 ggsave("expected_counts.png", p_response, path = "../../../../../results/figures/", width = 7.5, height = 3.5)
