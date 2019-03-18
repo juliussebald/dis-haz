@@ -27,7 +27,7 @@
 data <- read.csv("../data/data_for_model.csv") 
 
 processes <- c("MFL", "FST")
-processes_names <- c("Debris-flow", "Sediment-transport")
+processes_names <- c("Debris flow", "Flood")
 
 # Selecting a model -----------------------------------------------
 
@@ -40,7 +40,7 @@ vars_ws <- data.frame(varname = c("h_mean", "Melton", "Elevation", "Circularit",
                                   "type",
                                   "extent:type"), 
                       name = c("Elevation", "Melton ratio", "Elevation ratio", "Circularity", "Elongation", 
-                               "Artificial", "Forest", "Area", "Patch density", 
+                               "Infrastructure", "Forest cover", "Area", "Patch density", 
                                "Ecological region", 
                                "Extent", 
                                "Type",
@@ -241,6 +241,8 @@ ppc_mean <- pred_posterior_full %>%
   patchwork::wrap_plots(.)
 
 ggsave("ppc_count.pdf", ppc_mean, path = "../results/count/", width = 5.5, height = 2.5)
+ggsave("ppc_count.png", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 2.5)
+
 
 # Extract and plot estimates ----------------------------------------------
 
@@ -252,12 +254,12 @@ estimates <- final_models %>%
   set_names(processes_names) %>%
   bind_rows(.id = "process") %>%
   filter(!varname %in% c(paste0("eco_region", 1:9), "reciprocal_dispersion")) %>% 
-  mutate(name = factor(name, levels = c("Area", "Artificial", "Elevation", "Elevation ratio", "Circularity", 
-                                         "Melton ratio", "Elongation", "Forest", "Patch density", "Extent", 
+  mutate(name = factor(name, levels = c("Area", "Infrastructure", "Elevation", "Elevation ratio", "Circularity", 
+                                         "Melton ratio", "Elongation", "Forest cover", "Patch density", "Extent", 
                                          "Type", "Extent x Type"))) %>%
-  mutate(type = case_when(name %in% c("Area", "Elevation", "Artificial") ~ "General",
+  mutate(type = case_when(name %in% c("Area", "Elevation", "Infrastructure") ~ "General",
                           name %in% c ("Elevation ratio", "Circularity", "Melton ratio", "Elongation") ~ "Geomorphology",
-                          name %in% c("Forest", "Patch density", "Extent", "Type", "Extent x Type") ~ "Forest")) %>%
+                          name %in% c("Forest cover", "Patch density", "Extent", "Type", "Extent x Type") ~ "Forest")) %>%
   mutate(type = factor(type, levels = c("General", "Geomorphology", "Forest")))
 
 p_estimates <- ggplot(estimates, aes(x = fct_rev(name), y = value)) +
@@ -277,6 +279,8 @@ estimates$model <- "count"
 write_csv(estimates, "../results/count/estimates_count.csv")
 
 ggsave("estimates_count.pdf", p_estimates, path = "../results/count/", width = 5.5, height = 2.5)
+ggsave("estimates_count.png", p_estimates, path = "../../../../../results/supplement/", width = 5.5, height = 2.5)
+
 
 # Extract and plot eco_region effects -----------------------------------------
 
@@ -337,7 +341,7 @@ response_disturbance[, "sd"] <- apply(predictions, 2, sd)
 
 p_response_dfl <- response_disturbance %>%
   mutate(type = factor(type, labels =  c("Press", "Average", "Pulse"))) %>%
-  mutate(extent = factor(extent, labels =  c("Low extent", "Average extent", "Large extent"))) %>%
+  mutate(extent = factor(extent, labels =  c("Small extent", "Average extent", "Large extent"))) %>%
   split(list(.$type, .$extent)) %>%
   map(~ data.frame(count = 1:3, 
                    prop = dpois(x = 1:3, lambda = .$mean),
@@ -346,7 +350,7 @@ p_response_dfl <- response_disturbance %>%
   bind_rows(.id = "id") %>%
   separate("id", c("type", "extent"), "\\.") %>%
   mutate(type = factor(type, levels =  c("Press", "Average", "Pulse"))) %>%
-  mutate(extent = factor(extent, levels =  c("Low extent", "Average extent", "Large extent"))) %>%
+  mutate(extent = factor(extent, levels =  c("Small extent", "Average extent", "Large extent"))) %>%
   ggplot(., aes(x = as.factor(count), y = prop, fill = type)) +
   geom_bar(stat = "identity", position = "dodge") +
   geom_errorbar(aes(ymin = prop_lwr, ymax = prop_upr), position = position_dodge(width = 0.9), width = 0.25) +
@@ -358,10 +362,36 @@ p_response_dfl <- response_disturbance %>%
         strip.background = element_blank(),
         plot.title = element_text(size = 11)) +
   labs(x = "Number of events", y = "Probability", 
-       fill = "Disturbance type", title = "a) Debris-flow") +
+       fill = "Disturbance type", title = "a) Debris flow") +
   scale_fill_brewer(palette = "Set1") +
   facet_wrap(~extent) +
   ylim(0, 0.15)
+
+
+# Some numbers
+
+response_dfl <- response_disturbance %>%
+  mutate(type = factor(type, labels =  c("Press", "Average", "Pulse"))) %>%
+  mutate(extent = factor(extent, labels =  c("Small extent", "Average extent", "Large extent"))) %>%
+  split(list(.$type, .$extent)) %>%
+  map(~ data.frame(count = 1:3, 
+                   prop = dpois(x = 1:3, lambda = .$mean),
+                   prop_lwr = dpois(x = 1:3, lambda = .$mean - .$sd),
+                   prop_upr = dpois(x = 1:3, lambda = .$mean + .$sd))) %>%
+  bind_rows(.id = "id") %>%
+  separate("id", c("type", "extent"), "\\.") %>%
+  mutate(type = factor(type, levels =  c("Press", "Average", "Pulse"))) %>%
+  mutate(extent = factor(extent, levels =  c("Small extent", "Average extent", "Large extent")))
+
+large_press_2 <- filter(response_dfl, type == "Press" & extent == "Large extent" & count == 2)
+small_pulse_2 <- filter(response_dfl, type == "Pulse" & extent == "Low extent" & count == 2)
+
+
+worst <- large_press_2$prop
+best <- small_pulse_2$prop
+
+worst/best
+
 
 # FST
 
@@ -404,15 +434,48 @@ p_response_fst <- response_disturbance %>%
         strip.background = element_blank(),
         plot.title = element_text(size = 11)) +
   labs(x = "Number of events", y = "Probability", 
-       fill = "Disturbance type", title = "b) Sediment-transport") +
+       fill = "Disturbance type", title = "b) Flood") +
   scale_fill_brewer(palette = "Set1") +
   guides(fill = guide_legend(ncol = 1, 
                              keywidth = 0.15,
                              keyheight = 0.1,
                              default.unit = "inch"))
+# Also some numbers
+
+response_fst <- response_disturbance %>%
+  mutate(type = factor(type, labels =  c("Press", "Average", "Pulse"))) %>%
+  split(.$type) %>%
+  map(~ data.frame(count = 1:3, 
+                   prop = dpois(x = 1:3, lambda = .$mean),
+                   prop_lwr = dpois(x = 1:3, lambda = .$mean - .$sd),
+                   prop_upr = dpois(x = 1:3, lambda = .$mean + .$sd))) %>%
+  bind_rows(.id = "type") %>%
+  mutate(type = factor(type, levels =  c("Press", "Average", "Pulse"))) 
+
+# one event
+press_1 <- filter(response_fst, type == "Press" & count == 1)
+pulse_1 <- filter(response_fst, type == "Pulse" & count == 1)
+
+
+worst_1 <- press_1$prop
+best_1 <- pulse_1$prop
+
+worst_1/best_1
+
+#two events
+
+press_2 <- filter(response_fst, type == "Press" & count == 2)
+pulse_2 <- filter(response_fst, type == "Pulse" & count == 2)
+
+
+worst_2 <- press_2$prop
+best_2 <- pulse_2$prop
+
+worst_2/best_2
 
 # Combine plots
 
 p_response <- p_response_dfl + p_response_fst + plot_layout(ncol = 2, widths = c(3, 1.1))
 
 ggsave("expected_counts.pdf", p_response, path = "../results/count/", width = 7.5, height = 5)
+ggsave("expected_counts.png", p_response, path = "../../../../../results/figures/", width = 7.5, height = 3.5)

@@ -26,7 +26,7 @@
 data <- read.csv("../data/data_for_model.csv") 
 
 processes <- c("MFL", "FST")
-processes_names <- c("Debris-flow", "Sediment-transport")
+processes_names <- c("Debris flow", "Flood")
 
 # Selecting a model -----------------------------------------------
 
@@ -39,7 +39,7 @@ vars_ws <- data.frame(varname = c("h_mean", "Melton", "Elevation", "Circularit",
                                   "type",
                                   "extent:type"), 
                       name = c("Elevation", "Melton ratio", "Elevation ratio", "Circularity", "Elongation", 
-                               "Artificial", "Forest", "Area", "Patch density", 
+                               "Infrastructure", "Forest cover", "Area", "Patch density", 
                                "Ecological region", 
                                "Extent", 
                                "Type",
@@ -238,6 +238,7 @@ ppc_mean <- pred_posterior_full %>%
   patchwork::wrap_plots(.)
 
 ggsave("ppc_binomial.pdf", ppc_mean, path = "../results/binomial/", width = 5.5, height = 2.5)
+ggsave("ppc_binomial.png", ppc_mean, path = "../../../../../results/figures/", width = 5.5, height = 2.5)
 
 # Extract and plot estimates ----------------------------------------------
 
@@ -249,12 +250,12 @@ estimates <- final_models %>%
   set_names(processes_names) %>%
   bind_rows(.id = "process") %>%
   filter(!varname %in% c(paste0("eco_region", 1:9))) %>% 
-  mutate(name = factor(name, levels = c("Area", "Artificial", "Elevation", "Elevation ratio", "Circularity", 
-                                        "Melton ratio", "Elongation", "Forest", "Patch density", "Extent", 
+  mutate(name = factor(name, levels = c("Area", "Infrastructure", "Elevation", "Elevation ratio", "Circularity", 
+                                        "Melton ratio", "Elongation", "Forest cover", "Patch density", "Extent", 
                                         "Type", "Extent x Type"))) %>%
-  mutate(type = case_when(name %in% c("Area", "Elevation", "Artificial") ~ "General",
+  mutate(type = case_when(name %in% c("Area", "Elevation", "Infrastructure") ~ "General",
                           name %in% c ("Elevation ratio", "Circularity", "Melton ratio", "Elongation") ~ "Geomorphology",
-                          name %in% c("Forest", "Patch density", "Extent", "Type", "Extent x Type") ~ "Forest")) %>%
+                          name %in% c("Forest cover", "Patch density", "Extent", "Type", "Extent x Type") ~ "Forest")) %>%
   mutate(type = factor(type, levels = c("General", "Geomorphology", "Forest")))
 
 # Effect of forest cover on probability in % ("devide by four rule")
@@ -266,6 +267,17 @@ sediment <- filter(estimates, process == "Sediment-transport" & name == "Forest"
 (median(debris$value)/4)*100
 
 (median(sediment$value)/4)*100
+
+# Effect of patch density probability in % ("devide by four rule")
+
+debris <- filter(estimates, process == "Debris-flow" & name == "Patch density")
+
+sediment <- filter(estimates, process == "Sediment-transport" & name == "Patch density")
+
+(median(debris$value)/4)*100
+
+(median(sediment$value)/4)*100
+
 
 # Plot effect sizes and directions
 
@@ -391,12 +403,22 @@ p_response_dfl <- response_disturbance %>%
   scale_fill_brewer(palette = "Set1", breaks = c("Press", "Average", "Pulse")) +
   labs(x = "Disturbance extent", y = "Probability of occurrence", 
        fill = "Disturbance type", col = "Disturbance type",
-       title = "Debris-flow") +
+       title = "Debris flow") +
   guides(fill = guide_legend(ncol = 1, 
                              keywidth = 0.1,
                              keyheight = 0.1,
                              default.unit = "inch"))
 
 ggsave("response_curve_binomial.pdf", p_response_dfl, path = "../results/binomial/", width = 3.5, height = 3.5)
+ggsave("response_curve_binomial.png", p_response_dfl, path = "../../../../../results/figures/", width = 3.5, height = 3.5)
 
 
+# Some numbers ------------------------------------------------------------
+
+press_large <- filter(response_disturbance, type < -2 & extent > 0)
+pulse_small <- filter(response_disturbance, type > 0.9 & extent < 0)
+
+worst <- mean(press_large$mean)
+best <- mean(pulse_small$mean)
+
+worst/best
