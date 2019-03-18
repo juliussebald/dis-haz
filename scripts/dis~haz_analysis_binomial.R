@@ -258,26 +258,23 @@ estimates <- final_models %>%
                           name %in% c("Forest cover", "Patch density", "Extent", "Type", "Extent x Type") ~ "Forest")) %>%
   mutate(type = factor(type, levels = c("General", "Geomorphology", "Forest")))
 
-# Effect of forest cover on probability in % ("devide by four rule")
+# Calculate useful numbers Rupert will like
 
-debris <- filter(estimates, process == "Debris-flow" & name == "Forest")
+data_std <- data %>%
+  dplyr::select(-WLK_ID, -FST, -MFL, -eco_region) %>%
+  gather(key = varname) %>%
+  group_by(varname) %>%
+  summarize(mn = mean(value),
+            std = sd(value)) %>%
+  ungroup()
 
-sediment <- filter(estimates, process == "Sediment-transport" & name == "Forest")
-
-(median(debris$value)/4)*100
-
-(median(sediment$value)/4)*100
-
-# Effect of patch density probability in % ("devide by four rule")
-
-debris <- filter(estimates, process == "Debris-flow" & name == "Patch density")
-
-sediment <- filter(estimates, process == "Sediment-transport" & name == "Patch density")
-
-(median(debris$value)/4)*100
-
-(median(sediment$value)/4)*100
-
+estimates %>%
+  group_by(process, varname) %>%
+  summarize(median_effect = median(value)) %>%
+  mutate(median_effect_prop = median_effect / 4) %>%
+  left_join(data_std, by = "varname") %>%
+  mutate_at(.vars = vars(median_effect:std), round, 2) %>%
+  View(.)
 
 # Plot effect sizes and directions
 
@@ -361,6 +358,16 @@ ggsave("../results/binomial/ecoregion_map_binomial.pdf", p_map, width = 7.5, hei
 
 # Create response curve plots ---------------------------------------------
 
+# Re-create data_model data frame (same as for modeling above)
+
+vars_nointeraction <- vars_ws %>% 
+  filter(!varname %in% c("extent:type", "eco_region"))
+data_model <- data
+data_model[data_model$extent == 0, "type"] <- NA
+data_model <- data_model %>%
+  mutate_at(.vars = vars(c(vars_nointeraction$varname)), function(x) (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE))
+data_model[data_model$extent == min(data_model$extent), "type"] <- 0
+
 # DFL
 
 response_disturbance <- expand.grid(eco_region = factor(1),
@@ -373,8 +380,8 @@ response_disturbance <- expand.grid(eco_region = factor(1),
                                     forest = 0,
                                     Elevation = 0,
                                     Melton = 0,
-                                    extent = seq(quantile(scale(data$extent), 0), 
-                                                 quantile(scale(data$extent), 0.99), 
+                                    extent = seq(quantile(data_model$extent, 0), 
+                                                 quantile(data_model$extent, 0.99), 
                                                  length.out = 100),
                                     type = c(quantile(data_model$type, 0.05), 0, quantile(data_model$type, 0.95)))  # viele EZGs haben Pulisty kleiner als -1
 
@@ -382,15 +389,22 @@ predictions <- final_models[[1]] %>%
   posterior_linpred(., newdata = response_disturbance, transform = TRUE)
 
 response_disturbance[, "mean"] <- apply(predictions, 2, mean)
-response_disturbance[, "sd"] <- apply(predictions, 2, sd)  
+response_disturbance[, "lower"] <- response_disturbance[, "mean"] - apply(predictions, 2, sd)
+response_disturbance[, "upper"] <- response_disturbance[, "mean"] + apply(predictions, 2, sd)
+
+response_disturbance[, "mean_annual"] <- response_disturbance[, "mean"] / length(1986:2018)
+response_disturbance[, "lower_annual"] <- response_disturbance[, "lower"] / length(1986:2018)
+response_disturbance[, "upper_annual"] <- response_disturbance[, "upper"] / length(1986:2018)
+
+response_disturbance[, "extent_backtransformed"] <- response_disturbance[, "extent"] * sd(data$extent) + mean(data$extent)
 
 p_response_dfl <- response_disturbance %>%
   mutate(type = factor(type, labels =  c("Press", "Average", "Pulse"))) %>%
-  ggplot(., aes(x = extent, y = mean)) +
-  geom_ribbon(aes(ymin = mean - sd, ymax = mean + sd, fill = type), alpha = 0.3) +
+  ggplot(., aes(x = extent_backtransformed, y = mean_annual)) +
+  geom_ribbon(aes(ymin = lower_annual, ymax = upper_annual, fill = type), alpha = 0.3) +
   geom_line(aes(col = type)) +
-  geom_point(data = sample_n(data %>% mutate(extent = as.double(scale(extent))) %>% filter(extent < quantile(extent, 0.99)), 1000), 
-             aes(x = extent, y = -0.01), shape = 124, alpha = 0.3) +
+  geom_point(data = sample_n(data %>% mutate(extent = as.double(extent)) %>% filter(extent < quantile(extent, 0.99)), 1000), 
+             aes(x = extent, y = 0), shape = 124, alpha = 0.3) +
   theme_bw() +
   theme(legend.background = element_blank(),
         panel.grid = element_blank(),
@@ -401,17 +415,58 @@ p_response_dfl <- response_disturbance %>%
         legend.title = element_text(size = 9)) +
   scale_color_brewer(palette = "Set1", breaks = c("Press", "Average", "Pulse")) +
   scale_fill_brewer(palette = "Set1", breaks = c("Press", "Average", "Pulse")) +
-  labs(x = "Disturbance extent", y = "Probability of occurrence", 
+  labs(x = "Disturbance extent", y = bquote("Probability of occurrence (%"*yr^-1*")"), 
        fill = "Disturbance type", col = "Disturbance type",
        title = "Debris flow") +
   guides(fill = guide_legend(ncol = 1, 
                              keywidth = 0.1,
                              keyheight = 0.1,
-                             default.unit = "inch"))
+                             default.unit = "inch")) + 
+  scale_y_continuous(labels = function(x) round(x * 100, 1))
 
 ggsave("response_curve_binomial.pdf", p_response_dfl, path = "../results/binomial/", width = 3.5, height = 3.5)
 ggsave("response_curve_binomial.png", p_response_dfl, path = "../../../../../results/figures/", width = 3.5, height = 3.5)
 
+pred_extent01 <- posterior_linpred(final_models[[1]], newdata = data.frame(eco_region = factor(1),
+                                                                           h_mean = 0,    
+                                                                           Circularit = 0,
+                                                                           Elongation = 0,
+                                                                           artifical = 0,
+                                                                           area = 0,
+                                                                           patchdensity = 0,
+                                                                           forest = 0,
+                                                                           Elevation = 0,
+                                                                           Melton = 0,
+                                                                           extent = (0.1 - mean(data$extent)) / sd(data$extent),
+                                                                           #type = max(response_disturbance$type),
+                                                                           type = 0), 
+                                   transform = TRUE)
+
+pred_extent05 <- posterior_linpred(final_models[[1]], newdata = data.frame(eco_region = factor(1),
+                                                                           h_mean = 0,    
+                                                                           Circularit = 0,
+                                                                           Elongation = 0,
+                                                                           artifical = 0,
+                                                                           area = 0,
+                                                                           patchdensity = 0,
+                                                                           forest = 0,
+                                                                           Elevation = 0,
+                                                                           Melton = 0,
+                                                                           extent = (0.5 - mean(data$extent)) / sd(data$extent),
+                                                                           #type = max(response_disturbance$type),
+                                                                           type = 0), 
+                                   transform = TRUE)
+
+mean(pred_extent01 / 33) * 100
+(mean(pred_extent01 / 33) + sd(pred_extent01 / 33)) * 100
+(mean(pred_extent01 / 33) - sd(pred_extent01 / 33)) * 100
+
+mean(pred_extent05 / 33) * 100
+(mean(pred_extent05 / 33) + sd(pred_extent05 / 33)) * 100
+(mean(pred_extent05 / 33) - sd(pred_extent05 / 33)) * 100
+
+mean(pred_extent05 / pred_extent01)
+quantile(pred_extent05 / pred_extent01, c(0.025, 0.975))
 
 # Some numbers ------------------------------------------------------------
 
