@@ -10,12 +10,12 @@
 estimates <- list.files("../results/", glob2rx("estimates*.csv"), recursive = TRUE, full.names = TRUE) %>%
   map(read_csv) %>%
   bind_rows() %>%
-  mutate(name = factor(name, levels = c("Artificial", "Elevation","Area", 
+  mutate(name = factor(name, levels = c("Infrastructure", "Elevation","Area", 
                                         "Elevation ratio", "Circularity", "Melton ratio", "Elongation",    
-                                        "Extent x Type", "Extent", "Type", "Patch density", "Forest")))
+                                        "Extent x Type", "Extent", "Type", "Patch density", "Forest cover")))
 
 p_estimate <- list(a = estimates %>% 
-                     mutate(type = case_when(name %in% c("Forest", "Patch density") ~ "Forest",
+                     mutate(type = case_when(name %in% c("Forest cover", "Patch density") ~ "Forest",
                                              name %in% c("Extent x Type", "Extent", "Type") ~ "Disturbance",
                                              TRUE ~ type)) %>%      
                      mutate(type = factor(type, levels = c("General", "Geomorphology", "Forest", "Disturbance"))) %>% 
@@ -54,3 +54,5 @@ p_estimate <- list(a = estimates %>%
   wrap_plots(ncol = 1, heights = c(1, 1.2, 0.6, 1))
 
 ggsave("../results/estimates_combined.pdf", p_estimate, width = 5.5, height = 4.5)
+ggsave("../../../../../results/figures/estimates_combined.png", p_estimate, width = 5.5, height = 4.5)
+ggsave("../../../../../results/figures/estimates_combined.pdf", p_estimate, width = 5.5, height = 4.5)
