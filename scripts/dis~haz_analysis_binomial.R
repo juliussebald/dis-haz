@@ -15,9 +15,12 @@
   library(rstan) # version 2.17.4
   library(sf) # version 0.6-3
   library(gridExtra) # version 2.3
+  library(ggthemes)
   
   options(mc.cores = parallel::detectCores())
   rstan_options(auto_write = TRUE)
+  
+  rm(list=ls())
   
 }
 
@@ -237,8 +240,10 @@ ppc_mean <- pred_posterior_full %>%
          labs(title = .y, x = "Mean probability", y = "Count")) %>%
   patchwork::wrap_plots(.)
 
-ggsave("ppc_binomial.pdf", ppc_mean, path = "../results/binomial/", width = 5.5, height = 2.5)
-ggsave("ppc_binomial.png", ppc_mean, path = "../../../../../results/figures/", width = 5.5, height = 2.5)
+ggsave("ppc_binomial.pdf", ppc_mean, path = "../results/binomial/", width = 5.5, height = 3.5)
+ggsave("ppc_binomial.png", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 3.5)
+ggsave("ppc_binomial.pdf", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 3.5)
+
 
 # Extract and plot estimates ----------------------------------------------
 
@@ -322,15 +327,19 @@ p_eff <- ggplot(ecoregion_effects, aes(x = "", y = exp(value))) +
   theme(strip.background = element_blank()) +
   geom_hline(data = ecoregion_effects %>% group_by(process) %>% summarize(m = mean(exp(intercept))),
              aes(yintercept = m), linetype = "dashed", col = scales::muted("red")) +
-  labs(y = "Effect size", x = "", fill = "Ecological region") +
+  labs(y = "Effect size", x = "", fill = "Ecoregion") +
   scale_fill_brewer(palette = "Set1", labels = c("2","3","4","5","6","7","8","9"), breaks = c("eco_region2", "eco_region3", "eco_region4", "eco_region5", "eco_region6", "eco_region7", "eco_region8", "eco_region9")) +
   facet_wrap(~process) +
+  ylim(0,0.28) +
   theme(legend.position = "none") 
 
 ecoregion_effects$model <- "binomial"
 write_csv(ecoregion_effects, "../results/binomial/ecoregion_effects_binomial.csv")
 
 ggsave("ecoregion_effects_binomial.pdf", p_eff, path = "../results/binomial", width = 7, height = 2.5)
+ggsave("ecoregion_effects_binomial.pdf", p_eff, path = "../../../../../results/supplement/", width = 7.5, height = 3.5)
+ggsave("ecoregion_effects_binomial.png", p_eff, path = "../../../../../results/supplement/", width = 6, height = 2.5)
+
 
 # Map 
 
@@ -348,7 +357,7 @@ p_map <- raw_eco %>%
   geom_sf() +
   theme_bw() +
   scale_fill_brewer(palette = "Set1", direction = -1) +
-  guides(fill = guide_legend(title = "Ecological region")) 
+  guides(fill = guide_legend(title = "Ecoregion")) 
 
 ggsave("../../../../../results/supplement/ecoregion_map_binomial.pdf", p_map, width = 7.5, height = 5)
 ggsave("../../../../../results/supplement/ecoregion_map_binomial.png", p_map, width = 7.5, height = 5)

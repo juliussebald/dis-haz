@@ -240,8 +240,9 @@ ppc_mean <- pred_posterior_full %>%
          xlim(-1, 15)) %>%
   patchwork::wrap_plots(.)
 
-ggsave("ppc_count.pdf", ppc_mean, path = "../results/count/", width = 5.5, height = 2.5)
-ggsave("ppc_count.png", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 2.5)
+ggsave("ppc_count.pdf", ppc_mean, path = "../results/count/", width = 5.5, height = 3.5)
+ggsave("ppc_count.png", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 3.5)
+ggsave("ppc_count.pdf", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 3.5)
 
 
 # Extract and plot estimates ----------------------------------------------
@@ -351,7 +352,7 @@ response_disturbance[, "sd"] <- apply(predictions, 2, sd)
 
 p_response_dfl <- response_disturbance %>%
   mutate(type = factor(type, labels =  c("Press", "Pulse"))) %>%
-  mutate(extent = factor(extent, labels =  c("Small extent (10%)", "Large extent (50%)"))) %>%
+  mutate(extent = factor(extent, labels =  c("Small (10%)", "Large (50%)"))) %>%
   split(list(.$type, .$extent)) %>%
   map(~ data.frame(count = 1:2, 
                    prop = dpois(x = 1:2, lambda = .$mean / length(1986:2018)),
@@ -361,7 +362,7 @@ p_response_dfl <- response_disturbance %>%
   separate("id", c("type", "extent"), "\\.") %>%
   mutate(count = factor(count, labels =  c("One event", "Two events"))) %>%
   mutate(type = factor(type, levels =  c("Press", "Pulse"))) %>%
-  mutate(extent = factor(extent, levels =  c("Large extent (50%)", "Small extent (10%)"))) %>%
+  mutate(extent = factor(extent, levels =  c("Large (50%)", "Small (10%)"))) %>%
   ggplot(., aes(x = type, y = prop, fill = extent)) +
   geom_bar(stat = "identity", position = "dodge",  width = 0.5) +
   geom_errorbar(aes(ymin = prop_lwr, ymax = prop_upr), position = position_dodge(width = 0.45), width = 0.125) +
@@ -374,7 +375,7 @@ p_response_dfl <- response_disturbance %>%
         strip.background = element_blank(),
         plot.title = element_text(size = 11)) +
   labs(x = "Disturbance type", y = bquote("Probability of occurrence (%"*yr^-1*")"), 
-       fill = NULL, title = "a) Debris flow") +
+       fill = "Disturbance extent", title = "a) Debris flow") +
   scale_fill_brewer(palette = "Set1") +
   facet_wrap(~count, scales = "free") + 
   scale_y_continuous(labels = function(x) round(x * 100, 3))
@@ -382,8 +383,8 @@ p_response_dfl <- response_disturbance %>%
 # Some numbers
 
 response_dfl <- response_disturbance %>%
-  mutate(type = factor(type, labels =  c("Press", "Average", "Pulse"))) %>%
-  mutate(extent = factor(extent, labels =  c("Small extent (10%)", "Large extent (50%)"))) %>%
+  mutate(type = factor(type, labels =  c("Press", "Pulse"))) %>%
+  mutate(extent = factor(extent, labels =  c("Small (10%)", "Large (50%)"))) %>%
   split(list(.$type, .$extent)) %>%
   map(~ data.frame(count = 1:2, 
                    prop = dpois(x = 1:2, lambda = .$mean / length(1986:2018)),
@@ -392,13 +393,28 @@ response_dfl <- response_disturbance %>%
   bind_rows(.id = "id") %>%
   separate("id", c("type", "extent"), "\\.")
 
-large_press_2 <- filter(response_dfl, type == "Press" & extent == "Large extent (50%)" & count == 2)
-large_pulse_2 <- filter(response_dfl, type == "Pulse" & extent == "Large extent (50%)" & count == 2)
+large_press_1 <- filter(response_dfl, type == "Press" & extent == "Large (50%)" & count == 1) 
 
-worst <- large_press_2$prop * 100
-best <- small_pulse_2$prop * 100
 
-worst/best
+small_pulse_1 <- filter(response_dfl, type == "Pulse" & extent == "Small (10%)" & count == 1) 
+
+
+large_press_2 <- filter(response_dfl, type == "Press" & extent == "Large (50%)" & count == 2)  %>%
+  mutate_at(.vars = vars(prop:prop_upr), function(x) x*100)
+
+small_press_2 <- filter(response_dfl, type == "Press" & extent == "Small (10%)" & count == 2)  %>%
+  mutate_at(.vars = vars(prop:prop_upr), function(x) x*100)
+
+worst_1 <- large_press_1$prop * 100
+best_1 <- small_pulse_1$prop * 100
+
+worst_1/best_1
+
+
+worst_2 <- large_press_2$prop
+best_2 <- small_press_2$prop
+
+worst_2/best_2 - 1
 
 
 # FST
@@ -452,40 +468,48 @@ p_response_fst <- response_disturbance %>%
 # Also some numbers
 
 response_fst <- response_disturbance %>%
-  mutate(type = factor(type, labels =  c("Press", "Average", "Pulse"))) %>%
+  mutate(type = factor(type, labels =  c("Press", "Pulse"))) %>%
   split(.$type) %>%
-  map(~ data.frame(count = 1:3, 
-                   prop = dpois(x = 1:3, lambda = .$mean),
-                   prop_lwr = dpois(x = 1:3, lambda = .$mean - .$sd),
-                   prop_upr = dpois(x = 1:3, lambda = .$mean + .$sd))) %>%
+  map(~ data.frame(count = 1:2, 
+                   prop = dpois(x = 1:2, lambda = .$mean / length(1986:2018)),
+                   prop_lwr = dpois(x = 1:2, lambda = (.$mean - .$sd) / length(1986:2018)),
+                   prop_upr = dpois(x = 1:2, lambda = (.$mean + .$sd) / length(1986:2018)))) %>%
   bind_rows(.id = "type") %>%
-  mutate(type = factor(type, levels =  c("Press", "Average", "Pulse"))) 
+  mutate(type = factor(type, levels =  c("Press", "Pulse"))) 
 
 # one event
 
-press_1 <- filter(response_fst, type == "Press" & count == 1)
-pulse_1 <- filter(response_fst, type == "Pulse" & count == 1)
+press_1 <- filter(response_fst, type == "Press" & count == 1) %>%
+  mutate_at(.vars = vars(prop:prop_upr), function(x) x*100)
+
+pulse_1 <- filter(response_fst, type == "Pulse" & count == 1) %>%
+  mutate_at(.vars = vars(prop:prop_upr), function(x) x*100)
 
 
 worst_1 <- press_1$prop
 best_1 <- pulse_1$prop
 
-worst_1/best_1
+worst_1/best_1 - 1 
 
 #two events
 
-press_2 <- filter(response_fst, type == "Press" & count == 2)
-pulse_2 <- filter(response_fst, type == "Pulse" & count == 2)
+press_2 <- filter(response_fst, type == "Press" & count == 2) %>%
+  mutate_at(.vars = vars(prop:prop_upr), function(x) x*100) %>%
+  print(.)
+
+pulse_2 <- filter(response_fst, type == "Pulse" & count == 2 )%>%
+  mutate_at(.vars = vars(prop:prop_upr), function(x) x*100) %>%
+  print(.)
 
 
 worst_2 <- press_2$prop
 best_2 <- pulse_2$prop
 
-worst_2/best_2
+worst_2/best_2 - 1
 
 # Combine plots
 
 p_response <- p_response_dfl + p_response_fst + plot_layout(ncol = 1)
 
 ggsave("expected_counts.pdf", p_response, path = "../results/count/", width = 7, height = 5.5)
-ggsave("expected_counts.png", p_response, path = "../../../../../results/figures/", width = 7.5, height = 3.5)
+ggsave("expected_counts.png", p_response, path = "../../../../../results/figures/", width = 7, height = 6)
