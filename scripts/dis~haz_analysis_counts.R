@@ -240,8 +240,9 @@ ppc_mean <- pred_posterior_full %>%
          xlim(-1, 15)) %>%
   patchwork::wrap_plots(.)
 
-ggsave("ppc_count.pdf", ppc_mean, path = "../results/count/", width = 5.5, height = 2.5)
-ggsave("ppc_count.png", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 2.5)
+ggsave("ppc_count.pdf", ppc_mean, path = "../results/count/", width = 5.5, height = 3.5)
+ggsave("ppc_count.png", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 3.5)
+ggsave("ppc_count.pdf", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 3.5)
 
 
 # Extract and plot estimates ----------------------------------------------
@@ -343,6 +344,7 @@ response_disturbance <- expand.grid(eco_region = factor(1),
                                     Melton = 0,
                                     extent = c((0.5 - mean(data$extent)) / sd(data$extent), 
                                                (0.1 - mean(data$extent)) / sd(data$extent)),
+
                                     type = c(quantile(data_model$type, 0.05), 0, quantile(data_model$type, 0.95)))  # viele EZGs haben Pulisty kleiner als -1
 
 predictions_debris <- final_models[[1]] %>%
@@ -368,6 +370,7 @@ plotdata_debris <- predictions_debris %>%
 p_debris <- ggplot(plotdata_debris, aes(x = factor(count, levels = 1:max_event), y = (p / length(1986:2018)), fill = factor(type))) +
   geom_bar(stat = "identity", position = "dodge") +
   facet_wrap(~extent) +
+
   theme_bw() +
   theme(legend.background = element_blank(),
         legend.position = "right",
@@ -376,19 +379,23 @@ p_debris <- ggplot(plotdata_debris, aes(x = factor(count, levels = 1:max_event),
         panel.grid = element_blank(),
         strip.background = element_blank(),
         plot.title = element_text(size = 11)) +
+
   labs(x = "Number of events", y = bquote("Probability (%"*yr^-1*")"), 
        fill = "Disturbance type", title = "a) Debris flow") +
   #scale_fill_manual(values = RColorBrewer::brewer.pal(6, name = "Reds")[c(2, 4, 6)]) +
+
   scale_fill_brewer(palette = "Set1") +
   scale_y_continuous(labels = function(x) round(x * 100, 3))
 
 # Some numbers
+
 
 plotdata_debris %>% 
   filter(count == 1) %>%
   mutate(prop_report = p / length(1986:2018) * 100) %>%
   dplyr::select(type, extent, prop_report)
   
+
 # FST
 
 response_disturbance <- expand.grid(eco_region = factor(1),
@@ -437,6 +444,7 @@ p_flood <- ggplot(plotdata, aes(x = factor(count, levels = 1:max_event), y = (p 
        fill = "Disturbance type", title = "b) Flood") +
   #scale_fill_manual(values = RColorBrewer::brewer.pal(6, name = "Reds")[c(2, 4, 6)]) +
   scale_fill_brewer(palette = "Set1") +
+
   scale_y_continuous(labels = function(x) round(x * 100, 3)) +
   guides(fill = guide_legend(keyheight = 0.4, keywidth = 0.6))
 
@@ -448,11 +456,14 @@ plotdata_flood %>%
   mutate(prop_report = p / length(1986:2018) * 100) %>%
   dplyr::select(type, prop_report)
 
+
 # Combine plots
 
 p_response <- p_debris + theme(legend.position = "none") +
   p_flood + 
   plot_layout(ncol = 2, width = c(2, 1))
 
+
 ggsave("expected_counts.pdf", p_response, path = "../results/count/", width = 7.5, height = 2.5)
 ggsave("expected_counts.png", p_response, path = "../../../../../results/figures/", width = 7.5, height = 2.5)
+
