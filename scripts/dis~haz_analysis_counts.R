@@ -389,12 +389,27 @@ p_debris <- ggplot(plotdata_debris, aes(x = factor(count, levels = 1:max_event),
 
 # Some numbers
 
+# p two or more events
 
-plotdata_debris %>% 
-  filter(count == 1) %>%
+# press
+
+two.or.more.worst <- plotdata_debris %>%
   mutate(prop_report = p / length(1986:2018) * 100) %>%
-  dplyr::select(type, extent, prop_report)
-  
+  filter(extent == "Large extent (50%)" & type == "Press" & count > 1) 
+
+two.or.more.best <- plotdata_debris %>% 
+  mutate(prop_report = p / length(1986:2018) * 100) %>%
+  filter(extent == "Small extent (10%)" & type == "Press" & count > 1) %>%
+  na.omit()
+
+worst <- sum(two.or.more.worst$prop_report) %>%
+  print(.)
+
+best <- sum(two.or.more.best$prop_report) %>%
+  print(.)
+
+(worst/best - 1) *100
+
 
 # FST
 
@@ -414,7 +429,7 @@ response_disturbance <- expand.grid(eco_region = factor(1),
 predictions_flood <- final_models[[2]] %>%
   posterior_predict(., newdata = response_disturbance, transform = TRUE)
 
-plotdata_flood <- predictions %>%
+plotdata_flood <- predictions_flood %>%
   as.data.frame(.) %>%
   mutate(draw = as.integer(1:4000)) %>%
   gather(., key = key, value = count, -draw) %>%
@@ -430,7 +445,7 @@ plotdata_flood <- predictions %>%
   filter(count %in% 1:max_event) %>%
   mutate(type = factor(type, labels =  c("Press", "Average", "Pulse")))
 
-p_flood <- ggplot(plotdata, aes(x = factor(count, levels = 1:max_event), y = (p / length(1986:2018)), fill = factor(type))) +
+p_flood <- ggplot(plotdata_flood, aes(x = factor(count, levels = 1:max_event), y = (p / length(1986:2018)), fill = factor(type))) +
   geom_bar(stat = "identity", position = "dodge") +
   theme_bw() +
   theme(legend.background = element_blank(),
@@ -444,18 +459,48 @@ p_flood <- ggplot(plotdata, aes(x = factor(count, levels = 1:max_event), y = (p 
        fill = "Disturbance type", title = "b) Flood") +
   #scale_fill_manual(values = RColorBrewer::brewer.pal(6, name = "Reds")[c(2, 4, 6)]) +
   scale_fill_brewer(palette = "Set1") +
-
   scale_y_continuous(labels = function(x) round(x * 100, 3)) +
   guides(fill = guide_legend(keyheight = 0.4, keywidth = 0.6))
 
 
 # Some numbers
 
-plotdata_flood %>% 
-  filter(count == 1) %>%
-  mutate(prop_report = p / length(1986:2018) * 100) %>%
-  dplyr::select(type, prop_report)
+# p one event 
 
+one.worst <- plotdata_flood %>% 
+  mutate(prop_report = p / length(1986:2018) * 100) %>%
+  filter(type == "Press" & count == 1) 
+
+one.best <- plotdata_flood %>%
+  mutate(prop_report = p / length(1986:2018) * 100) %>%
+  filter(type == "Pulse" & count == 1) 
+
+worst <- one.worst$prop_report %>%
+  print(.)
+
+best <- one.best$prop_report %>%
+  print(.)
+
+(worst/best - 1) *100
+
+# p two or more eventa 
+
+two.or.more.worst <- plotdata_flood %>% 
+  mutate(prop_report = p / length(1986:2018) * 100) %>%
+  filter(type == "Press" & count > 1) 
+
+two.or.more.best <- plotdata_flood %>% 
+  mutate(prop_report = p / length(1986:2018) * 100) %>%
+  filter(type == "Pulse" & count > 1) %>%
+  na.omit()
+
+worst <- sum(two.or.more.worst$prop_report) %>%
+  print(.)
+
+best <- sum(two.or.more.best$prop_report) %>%
+  print(.)
+
+(worst/best - 1) *100
 
 # Combine plots
 
@@ -465,5 +510,5 @@ p_response <- p_debris + theme(legend.position = "none") +
 
 
 ggsave("expected_counts.pdf", p_response, path = "../results/count/", width = 7.5, height = 2.5)
-ggsave("expected_counts.png", p_response, path = "../../../../../results/figures/", width = 7.5, height = 2.5)
+ggsave("expected_counts.png", p_response, path = "../../../../../results/figures/", width = 7, height = 3)
 
