@@ -240,10 +240,7 @@ ppc_mean <- pred_posterior_full %>%
          labs(title = .y, x = "Mean probability", y = "Count")) %>%
   patchwork::wrap_plots(.)
 
-ggsave("ppc_binomial.pdf", ppc_mean, path = "../results/binomial/", width = 5.5, height = 3.5)
-ggsave("ppc_binomial.png", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 3.5)
-ggsave("ppc_binomial.pdf", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 3.5)
-
+ggsave("ppc_binomial.pdf", ppc_mean, path = "../results/supplement/", width = 5.5, height = 3.5)
 
 # Extract and plot estimates ----------------------------------------------
 
@@ -258,12 +255,12 @@ estimates <- final_models %>%
   mutate(name = factor(name, levels = c("Area", "Infrastructure", "Elevation", "Elevation ratio", "Circularity", 
                                         "Melton ratio", "Elongation", "Forest cover", "Patch density", "Extent", 
                                         "Type", "Extent x Type"))) %>%
-  mutate(type = case_when(name %in% c("Area", "Elevation", "Infrastructure") ~ "General",
+  mutate(type = case_when(name %in% c("Area", "Elevation", "Infrastructure") ~ "Geography",
                           name %in% c ("Elevation ratio", "Circularity", "Melton ratio", "Elongation") ~ "Geomorphology",
                           name %in% c("Forest cover", "Patch density", "Extent", "Type", "Extent x Type") ~ "Forest")) %>%
-  mutate(type = factor(type, levels = c("General", "Geomorphology", "Forest")))
+  mutate(type = factor(type, levels = c("Geography", "Geomorphology", "Forest")))
 
-# Calculate useful numbers Rupert will like
+# Calculate useful numbers
 
 data_std <- data %>%
   dplyr::select(-WLK_ID, -FST, -MFL, -eco_region) %>%
@@ -294,7 +291,7 @@ p_estimates <- ggplot(estimates, aes(x = fct_rev(name), y = value)) +
   labs(y = "Effect size", x = NULL) +
   #scale_fill_brewer(palette = "Greys", direction = -1) +
   facet_wrap(~process) +
-  scale_fill_manual(values = c("#276419","#ffffbf", "#4393c3"), breaks = c("  General", "  Geomorphology", "  Forest" )) +
+  scale_fill_manual(values = c("#276419","#ffffbf", "#4393c3"), breaks = c("  Geography", "  Geomorphology", "  Forest" )) +
   theme(legend.title = element_blank())
 
 estimates$model <- "binomial"
@@ -336,9 +333,7 @@ p_eff <- ggplot(ecoregion_effects, aes(x = "", y = exp(value))) +
 ecoregion_effects$model <- "binomial"
 write_csv(ecoregion_effects, "../results/binomial/ecoregion_effects_binomial.csv")
 
-ggsave("ecoregion_effects_binomial.pdf", p_eff, path = "../results/binomial", width = 7, height = 2.5)
-ggsave("ecoregion_effects_binomial.pdf", p_eff, path = "../../../../../results/supplement/", width = 7.5, height = 3.5)
-ggsave("ecoregion_effects_binomial.png", p_eff, path = "../../../../../results/supplement/", width = 6, height = 2.5)
+ggsave("ecoregion_effects_binomial.pdf", p_eff, path = "../results/supplement/", width = 7, height = 2.5)
 
 
 # Map 
@@ -434,7 +429,6 @@ p_response_dfl <- response_disturbance %>%
   scale_y_continuous(labels = function(x) round(x * 100, 1))
 
 ggsave("response_curve_binomial.pdf", p_response_dfl, path = "../results/binomial/", width = 3.5, height = 3.5)
-ggsave("response_curve_binomial.png", p_response_dfl, path = "../../../../../results/figures/", width = 3.5, height = 3.5)
 
 pred_extent01 <- posterior_linpred(final_models[[1]], newdata = data.frame(eco_region = factor(1),
                                                                            h_mean = 0,    

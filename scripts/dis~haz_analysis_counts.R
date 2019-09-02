@@ -213,7 +213,7 @@ model_comparsion <- left_join(elpd, elpd_differeences, by = c("process", "predic
   spread(key = predictor, value = value) %>%
   dplyr::select(process, null, general, general_geomorph, general_geomorph_forest, general_geomorph_forest_disturbances)
 
-write_csv(model_comparsion, "../results/count/model_performances_count.csv")
+write_csv(model_comparsion, "../results/count/model_comparison_count.csv")
 
 ### Extract final model
 
@@ -240,9 +240,7 @@ ppc_mean <- pred_posterior_full %>%
          xlim(-1, 15)) %>%
   patchwork::wrap_plots(.)
 
-ggsave("ppc_count.pdf", ppc_mean, path = "../results/count/", width = 5.5, height = 3.5)
-ggsave("ppc_count.png", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 3.5)
-ggsave("ppc_count.pdf", ppc_mean, path = "../../../../../results/supplement/", width = 5.5, height = 3.5)
+ggsave("ppc_count.pdf", ppc_mean, path = "../results/supplement/", width = 5.5, height = 3.5)
 
 
 # Extract and plot estimates ----------------------------------------------
@@ -258,10 +256,10 @@ estimates <- final_models %>%
   mutate(name = factor(name, levels = c("Area", "Infrastructure", "Elevation", "Elevation ratio", "Circularity", 
                                          "Melton ratio", "Elongation", "Forest cover", "Patch density", "Extent", 
                                          "Type", "Extent x Type"))) %>%
-  mutate(type = case_when(name %in% c("Area", "Elevation", "Infrastructure") ~ "General",
+  mutate(type = case_when(name %in% c("Area", "Elevation", "Infrastructure") ~ "Geography",
                           name %in% c ("Elevation ratio", "Circularity", "Melton ratio", "Elongation") ~ "Geomorphology",
                           name %in% c("Forest cover", "Patch density", "Extent", "Type", "Extent x Type") ~ "Forest")) %>%
-  mutate(type = factor(type, levels = c("General", "Geomorphology", "Forest")))
+  mutate(type = factor(type, levels = c("Geography", "Geomorphology", "Forest")))
 
 p_estimates <- ggplot(estimates, aes(x = fct_rev(name), y = value)) +
   geom_violin(aes(fill = paste0("  ", type))) +
@@ -273,14 +271,13 @@ p_estimates <- ggplot(estimates, aes(x = fct_rev(name), y = value)) +
   geom_hline(yintercept = 0, linetype = "dashed", col = scales::muted("red")) +
   labs(y = "Posterior probability distribution of parameter estimates", x = NULL) +
   facet_wrap(~process) +
-  scale_fill_manual(values = c("#276419","#ffffbf", "#4393c3"), breaks = c("  General", "  Geomorphology", "  Forest" )) +
+  scale_fill_manual(values = c("#276419","#ffffbf", "#4393c3"), breaks = c("  Geography", "  Geomorphology", "  Forest" )) +
   theme(legend.title = element_blank())
 
 estimates$model <- "count"
 write_csv(estimates, "../results/count/estimates_count.csv")
 
 ggsave("estimates_count.pdf", p_estimates, path = "../results/count/", width = 5.5, height = 2.5)
-ggsave("estimates_count.png", p_estimates, path = "../../../../../results/supplement/", width = 5.5, height = 2.5)
 
 # Extract and plot eco_region effects -----------------------------------------
 
@@ -312,7 +309,7 @@ p_ecoregion_effects <- ggplot(ecoregion_effects, aes(x = fct_rev(eco_region), y 
 
 ecoregion_effects$model <- "count"
 
-write_csv(ecoregion_effects, "../results/count/ecoregion_effects_count.csv")
+write_csv(ecoregion_effects, "../results/supplement//ecoregion_effects_count.csv")
 
 ggsave("ecoregion_effects_count.pdf", p_ecoregion_effects, path = "../results/count/", width = 5, height = 2.5)
 
@@ -463,6 +460,7 @@ p_flood <- ggplot(plotdata_flood, aes(x = factor(count, levels = 1:max_event), y
   guides(fill = guide_legend(keyheight = 0.4, keywidth = 0.6))
 
 
+
 # Some numbers
 
 # p one event 
@@ -502,6 +500,8 @@ best <- sum(two.or.more.best$prop_report) %>%
 
 (worst/best - 1) *100
 
+
+
 # Combine plots
 
 p_response <- p_debris + theme(legend.position = "none") +
@@ -510,5 +510,3 @@ p_response <- p_debris + theme(legend.position = "none") +
 
 
 ggsave("expected_counts.pdf", p_response, path = "../results/count/", width = 7.5, height = 2.5)
-ggsave("expected_counts.png", p_response, path = "../../../../../results/figures/", width = 7, height = 3)
-
